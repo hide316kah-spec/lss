@@ -1,29 +1,31 @@
-<!DOCTYPE html>
-<html lang="ja">
+<!doctype html><html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>横取り装置｜モード選択</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ランプシャッター | モード選択</title>
 <style>
   :root { color-scheme: dark; }
-  body { margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; text-align:center; }
-  h1 { margin:18px 0 10px; font-size:22px; font-weight:700; }
-  .mode { width:min(92vw,820px); margin:14px auto; border-radius:16px; overflow:hidden; background:#111; box-shadow:0 0 0 1px #222 inset; }
-  .mode img { width:100%; display:block; }
-  .note { margin:10px 0 20px; opacity:.85; font-size:14px; }
+  html,body{margin:0;height:100%;background:#0a0a0a;font-family:system-ui,-apple-system,"Segoe UI",Roboto;}
+  .wrap{display:grid;place-items:center;height:100%;gap:24px}
+  h1{color:#fff;font-size:22px;margin:0 0 8px}
+  .row{display:flex;gap:16px}
+  .btn{display:inline-grid;place-items:center;width:140px;height:140px;border-radius:16px;
+       font-weight:700;text-decoration:none;font-size:18px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+  .day{background:#1a4dff;color:#fff}
+  .night{background:#111;color:#fff;border:2px solid #00e5ff}
+  .hint{color:#bbb;font-size:13px}
 </style>
 </head>
 <body>
-  <h1>いずれかをタップして判定を開始</h1>
-
-  <div class="mode" onclick="location.href='day_mode.html'">
-    <img src="assets/day_mode.png" alt="昼モード（印刷紙テスト・甘め）">
+  <div class="wrap">
+    <div style="text-align:center">
+      <h1>ランプシャッター</h1>
+      <div class="hint">昼／夜を選んでください（UIは固定・変更禁止）</div>
+    </div>
+    <div class="row">
+      <a class="btn day"   href="day_mode.html">昼モード</a>
+      <a class="btn night" href="night_mode.html">夜モード</a>
+    </div>
   </div>
-
-  <div class="mode" onclick="location.href='night_mode.html'">
-    <img src="assets/night_mode.png" alt="夜モード（現場LED・厳しめ）">
-  </div>
-
-  <p class="note">※タップ後にカメラ・保存の許可を求めます（背面カメラ固定）</p>
 </body>
 </html>
