@@ -1,46 +1,36 @@
-<!doctype html><html lang="ja"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>昼モード - ランプシャッター</title>
-<link rel="icon" href="assets/instant_cam.png">
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ランプシャッター（昼）</title>
+<link rel="preload" href="app.js" as="script">
 <style>
-  html,body{margin:0;height:100%;background:#000}
-  #stage{position:fixed;inset:0;background:#000}
-  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:none} /* 非ミラー */
-  canvas{display:none}
-  #roi{position:absolute;border:3px dashed rgba(0,255,170,.85);border-radius:10px;pointer-events:none}
-  #badge{position:absolute;top:10px;left:12px;font:800 28px/1 system-ui; padding:10px 14px;border-radius:12px;color:#fff;background:#d33;box-shadow:0 4px 16px rgba(0,0,0,.4)}
-  #badge.ok{background:#20c05a}
-  #shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);width:120px;height:120px;border-radius:24px;background:rgba(18,18,18,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
-  #shutter img{width:92px;height:92px;display:block}
-  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .12s}
+html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system}
+#hud{position:fixed;top:10px;left:10px;z-index:30}
+.badge{font-weight:900;padding:8px 14px;border-radius:12px;font-size:24px}
+.ok{background:#17c964;color:#003300} .ng{background:#e5484d}
+#roi{position:fixed;right:10px;top:60px;width:46%;height:18%;border:3px dashed #39e3a5;border-radius:10px;z-index:25;pointer-events:none}
+#cam{position:fixed;left:50%;bottom:14%;transform:translateX(-50%);z-index:40;border-radius:16px;background:#00000090;padding:6px}
+#cam img{width:112px;height:112px;display:block}
+#preview{position:fixed;inset:0;object-fit:cover;transform:scaleX(1)} /* 非ミラー */
+.flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:50;transition:opacity .15s}
 </style>
 </head>
 <body>
-<div id="stage">
-  <video id="v" autoplay playsinline></video>
-  <div id="roi"></div>
-  <div id="badge">NG?</div>
-  <button id="shutter" aria-label="撮影"><img src="assets/instant_cam.png" alt=""></button>
-  <div id="flash"></div>
-  <audio id="okvoice" src="assets/ok_voice.mp3" preload="auto"></audio>
-  <canvas id="grab"></canvas>
-</div>
+  <div id="hud"><span id="status" class="badge ng">NG?</span></div>
+  <div id="roi" aria-hidden="true"></div>
+  <video id="preview" autoplay playsinline muted></video>
 
-<script src="app.js"></script>
+  <!-- インスタントカメラ風ボタン（PNG推奨） -->
+  <button id="cam" aria-label="撮影">
+    <img src="assets/camera.png" alt="">
+  </button>
+
+  <div class="flash" id="flash"></div>
 <script>
-  // ROIは右上・横長、8灯が収まるサイズ
-  const CONFIG = {
-    mode: 'day',
-    roi: { topPct: 7, rightPct: 3, widthPct: 44, heightPct: 22 }, // 昼も夜も同形。数値は“横長で8灯入る”サイズ
-    thresholds: {
-      // 昼＝厳しめ（色差が出にくいので要件を上げる）
-      red:   { r: 95, rn: 0.44, rg: 20, rb: 20 },  // r>95, r/(r+g+b)>0.44, r-g>20, r-b>20
-      green: { g: 85, gn: 0.44, gr: 12, gb: 12 }  // g>85, g/(r+g+b)>0.44, g-r>12, g-b>12
-    },
-    sampleStep: 6, // 6px間隔
-    okRule: { greenMinPct: 0.8, redMaxPct: 0.7 }, // “緑多め/赤少なめ”の簡易規則（比率%）
-    autoHoldMs: 300 // OKが連続でこの時間続いたら自動撮影
-  };
-  window.startLampShutter(CONFIG);
+window.LS_MODE = "day";
 </script>
-</body></html>
+<script defer src="app.js"></script>
+</body>
+</html>

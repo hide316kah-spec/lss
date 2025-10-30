@@ -1,165 +1,153 @@
-/* ランプシャッター共通：背面カメラ固定/非ミラー、ROIはプレビューのみ
-   OK/NG?バッジは大きめ（OK=緑背景、NG?=赤背景）
-   OKが一定時間継続で自動撮影＋女性音声＋フラッシュ＋バイブ
-   保存は JPG ／ 例: 20251030_221530_OK.jpg または 20251030_221530_NG?.jpg
-*/
-(function(){
-  function qs(s){return document.querySelector(s)}
-  function pct(n,base){return Math.round((n/base)*1000)/10}
+/* ===== ランプシャッター 共通 ===== */
 
-  async function initCamera(v){
+// ---- 設定（絶対に触らないUI仕様）----
+const CFG = {
+  sampleStep: 6,                 // サンプリング間隔(px)
+  fileName: (ok)=> {
+    const d = new Date();
+    const z = n=> String(n).padStart(2,'0');
+    return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}_${ok?'OK':'NG?'}.jpg`;
+  },
+  // 色判定の基本条件
+  base: {
+    red:  (r,g,b)=> (r>90) && (r/(r+g+b) > 0.40) && ((r-g)>18) && ((r-b)>18),
+    green:(r,g,b)=> (g>80) && (g/(r+g+b) > 0.40) && ((g-r)>10) && ((g-b)>10),
+  },
+  // 昼/夜で閾値（厳しめ/甘め）の補正
+  mode: {
+    day:   { // 昼＝厳しめ（誤検知抑制）
+      gRatioOK: 0.020,   // ROI内で緑画素割合がこれ以上
+      rRatioMax:0.006    // かつ赤画素割合がこれ以下 → OK
+    },
+    night: { // 夜＝甘め（光飽和に配慮）
+      gRatioOK: 0.015,
+      rRatioMax:0.010
+    }
+  }
+};
+
+// ---- DOM 取得（モード画面でのみ動作）----
+const video = document.getElementById('preview');
+const roiEl = document.getElementById('roi');
+const statusEl = document.getElementById('status');
+const camBtn = document.getElementById('cam');
+const flashEl = document.getElementById('flash');
+
+if (video && roiEl && statusEl && camBtn) {
+  (async () => {
+    // 背面カメラ固定 / 非ミラー
     const stream = await navigator.mediaDevices.getUserMedia({
-      video:{
-        facingMode:{ideal:"environment"}, // 背面
-        width:{ideal:1920}, height:{ideal:1080}
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 }, height: { ideal: 1080 },
+        focusMode: "continuous" // iOSは無視されてもOK
       },
       audio:false
     });
-    v.srcObject = stream;
-    await v.play();
-    return stream;
-  }
+    video.srcObject = stream;
 
-  function layoutROI(v, roiEl, spec){
-    const W = v.clientWidth, H = v.clientHeight;
-    const w = Math.round(W * (spec.widthPct/100));
-    const h = Math.round(H * (spec.heightPct/100));
-    const top = Math.round(H * (spec.topPct/100));
-    const right = Math.round(W * (spec.rightPct/100));
-    roiEl.style.width = w+"px";
-    roiEl.style.height = h+"px";
-    roiEl.style.top = top+"px";
-    roiEl.style.left = (W - right - w) +"px"; // 右上
-  }
+    // 解析ループ
+    const off = document.createElement('canvas');
+    const ctx = off.getContext('2d',{willReadFrequently:true});
+    const loop = () => {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (vw && vh) {
+        off.width = vw; off.height = vh;
+        ctx.drawImage(video, 0, 0, vw, vh);
 
-  function analyzeROI(ctx, x,y,w,h, step, th){
-    let rHit=0,gHit=0,total=0;
-    const data = ctx.getImageData(x,y,w,h).data;
-    for(let j=0;j<h;j+=step){
-      for(let i=0;i<w;i+=step){
-        const idx=((j*w)+i)*4;
-        const r=data[idx], g=data[idx+1], b=data[idx+2];
-        const s=r+g+b || 1;
-        const rn=r/s, gn=g/s;
-        // 赤
-        if(r>th.red.r && rn>th.red.rn && (r-g)>th.red.rg && (r-b)>th.red.rb){ rHit++; }
-        // 緑
-        if(g>th.green.g && gn>th.green.gn && (g-r)>th.green.gr && (g-b)>th.green.gb){ gHit++; }
-        total++;
-      }
-    }
-    return { rPct: pct(rHit,total), gPct: pct(gHit,total) };
-  }
+        // ROI（右上・横長）を動画サイズから算出（UIの枠と一致）
+        const rx = Math.round(vw*0.52), ry = Math.round(vh*0.06);
+        const rw = Math.round(vw*0.46), rh = Math.round(vh*0.18);
 
-  function drawToCanvas(video, canvas){
-    const vw = video.videoWidth, vh = video.videoHeight;
-    canvas.width = vw; canvas.height = vh;
-    const c = canvas.getContext("2d");
-    c.drawImage(video,0,0,vw,vh); // 非ミラー
-    return c;
-  }
-
-  function stamp(c, verdict){
-    const pad = 18;
-    const t = new Date();
-    const ts = t.getFullYear().toString().padStart(4,"0")
-      + (t.getMonth()+1).toString().padStart(2,"0")
-      + t.getDate().toString().padStart(2,"0")
-      + "_" + t.getHours().toString().padStart(2,"0")
-      + t.getMinutes().toString().padStart(2,"0")
-      + t.getSeconds().toString().padStart(2,"0");
-    const W=c.canvas.width, H=c.canvas.height;
-    c.font = Math.round(W*0.035)+"px system-ui";
-    c.fillStyle="rgba(0,0,0,.55)";
-    c.fillRect(pad, H-pad-70, W*0.6, 60);
-    c.fillStyle="#fff";
-    c.fillText(ts+"  "+verdict, pad+14, H-pad-24);
-    return { ts };
-  }
-
-  async function captureAndSave(video, badge, flashEl, voice, verdict){
-    // フラッシュ
-    flashEl.style.opacity="1"; requestAnimationFrame(()=>flashEl.style.opacity="0");
-    // バイブ
-    if(navigator.vibrate) navigator.vibrate([40,30,40]);
-    // 音声（OK時のみ）
-    if(verdict==="OK"){
-      try{ voice.currentTime=0; await voice.play(); }catch(_){}
-    }
-
-    const canvas = qs("#grab");
-    const ctx = drawToCanvas(video, canvas);   // ROIは焼き込まない
-    const meta = stamp(ctx, verdict);
-
-    canvas.toBlob(blob=>{
-      const name = `${meta.ts}_${verdict}.jpg`;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    },"image/jpeg",0.92);
-  }
-
-  window.startLampShutter = async function(CONFIG){
-    const v = qs("#v"), roiEl=qs("#roi"), badge=qs("#badge");
-    const shutterBtn = qs("#shutter"); const flashEl=qs("#flash"); const voice=qs("#okvoice");
-
-    const stream = await initCamera(v);
-    const onResize = ()=> layoutROI(v, roiEl, CONFIG.roi);
-    addEventListener("resize", onResize); v.addEventListener("loadedmetadata", onResize);
-    onResize();
-
-    let okStableSince = 0, lastVerdict = "NG?";
-    const tmp = document.createElement("canvas"); const tctx = tmp.getContext("2d");
-
-    function tick(){
-      if(v.readyState>=2){
-        // draw video frame to temp canvas matching ROI area
-        const W=v.videoWidth, H=v.videoHeight;
-        tmp.width=W; tmp.height=H; tctx.drawImage(v,0,0,W,H);
-
-        // ROI座標（DOMとビデオの座標系をスケール変換）
-        const scaleX = W / v.clientWidth;
-        const scaleY = H / v.clientHeight;
-        const rx = roiEl.offsetLeft * scaleX;
-        const ry = roiEl.offsetTop  * scaleY;
-        const rw = roiEl.clientWidth * scaleX;
-        const rh = roiEl.clientHeight* scaleY;
-
-        const pr = analyzeROI(tctx, rx,ry,rw,rh, CONFIG.sampleStep, CONFIG.thresholds);
-        const isOK = (pr.gPct >= CONFIG.okRule.greenMinPct*100) && (pr.rPct <= CONFIG.okRule.redMaxPct*100);
-
-        // バッジ
-        if(isOK){ badge.textContent="OK"; badge.classList.add("ok"); }
-        else    { badge.textContent="NG?"; badge.classList.remove("ok"); }
-
-        // オートシャッター（OKがautoHoldMs継続）
-        const now = performance.now();
-        if(isOK){
-          if(lastVerdict!=="OK"){ okStableSince = now; }
-          if(now - okStableSince >= CONFIG.autoHoldMs){
-            // 一回だけ切る
-            captureAndSave(v, badge, flashEl, voice, "OK");
-            okStableSince = Number.POSITIVE_INFINITY; // 連写は別仕様
+        // 6px間隔でサンプリング
+        const step = CFG.sampleStep;
+        let rCount=0, gCount=0, total=0;
+        for (let y=ry; y<ry+rh; y+=step){
+          for (let x=rx; x<rx+rw; x+=step){
+            const d = ctx.getImageData(x,y,1,1).data;
+            const r=d[0], g=d[1], b=d[2];
+            if (CFG.base.red(r,g,b))   rCount++;
+            if (CFG.base.green(r,g,b)) gCount++;
+            total++;
           }
-        }else{
-          okStableSince = 0;
         }
-        lastVerdict = isOK ? "OK" : "NG?";
+        const rRatio = rCount/total, gRatio = gCount/total;
+
+        // 閾値（昼/夜）
+        const M = CFG.mode[(window.LS_MODE||'day')];
+        const isOK = (gRatio >= M.gRatioOK) && (rRatio <= M.rRatioMax);
+
+        // HUD表示（動的更新）
+        statusEl.textContent = isOK ? "OK" : "NG?";
+        statusEl.className = `badge ${isOK?'ok':'ng'}`;
+
+        // OKで自動撮影（1回/1.2秒まで）
+        const now = performance.now();
+        if (isOK && (!window.__lastShot || now - window.__lastShot > 1200)) {
+          window.__lastShot = now;
+          takeShot("auto", ctx, vw, vh, isOK);
+        }
       }
-      requestAnimationFrame(tick);
-    }
-    tick();
+      requestAnimationFrame(loop);
+    };
+    loop();
+  })();
 
-    // 手動撮影（OK/NG? どちらでも撮影）
-    shutterBtn.addEventListener("click", ()=> {
-      const verdict = badge.classList.contains("ok") ? "OK" : "NG?";
-      captureAndSave(v, badge, flashEl, voice, verdict);
-    });
+  // 手動撮影
+  camBtn.addEventListener('click', async ()=>{
+    const v = video;
+    if (!v.videoWidth) return;
+    const off = document.createElement('canvas');
+    off.width = v.videoWidth; off.height = v.videoHeight;
+    const c = off.getContext('2d');
+    c.drawImage(v,0,0,off.width,off.height);
+    const ok = (statusEl.textContent==="OK");
+    await takeShot("manual", c, off.width, off.height, ok);
+  });
+}
 
-    // ページ離脱時に停止
-    addEventListener("pagehide", ()=> stream.getTracks().forEach(t=>t.stop()), {once:true});
+// ---- 撮影・保存（ROIは焼き込まない・OK/NG?と日時のみ焼き込む）----
+async function takeShot(kind, ctx, w, h, isOK){
+  // フラッシュ＋バイブ
+  flashEl.style.opacity = .85; setTimeout(()=>flashEl.style.opacity=0,120);
+  if (navigator.vibrate) navigator.vibrate(80);
+
+  // HUD焼き込み
+  ctx.save();
+  ctx.fillStyle = isOK ? "#17c964" : "#e5484d";
+  ctx.globalAlpha = .9;
+  ctx.fillRect(18,18, isOK?120:140, 60);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = isOK ? "#003300" : "#fff";
+  ctx.font = "700 36px system-ui,-apple-system";
+  ctx.fillText(isOK?"OK":"NG?", 30, 60);
+  // 日時
+  const d = new Date();
+  const z=n=>String(n).padStart(2,"0");
+  const stamp = `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+  ctx.font = "600 24px system-ui,-apple-system";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(stamp, 18, h-24);
+  ctx.restore();
+
+  // 音声「OK」再生（Web Speech：女性声を優先）
+  if (isOK) {
+    try {
+      const u = new SpeechSynthesisUtterance("オーケー");
+      u.lang = "ja-JP";
+      const voices = speechSynthesis.getVoices();
+      const f = voices.find(v=>/ja|Japanese/i.test(v.lang) && /female|女|Microsoft Haruka|Kyoko/i.test(v.name));
+      if (f) u.voice = f;
+      speechSynthesis.speak(u);
+    } catch(e){}
   }
-})();
+
+  // JPG生成＆ダウンロード（iOSは共有シート）
+  const dataUrl = ctx.canvas.toDataURL("image/jpeg", 0.92);
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = CFG.fileName(isOK);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
