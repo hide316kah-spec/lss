@@ -1,195 +1,165 @@
-/* ===== ランプシャッター 共通ロジック ===== */
-let MODE = 'day';
-export function setMode(m){ MODE = m; }
+/* ランプシャッター共通：背面カメラ固定/非ミラー、ROIはプレビューのみ
+   OK/NG?バッジは大きめ（OK=緑背景、NG?=赤背景）
+   OKが一定時間継続で自動撮影＋女性音声＋フラッシュ＋バイブ
+   保存は JPG ／ 例: 20251030_221530_OK.jpg または 20251030_221530_NG?.jpg
+*/
+(function(){
+  function qs(s){return document.querySelector(s)}
+  function pct(n,base){return Math.round((n/base)*1000)/10}
 
-/* 判定パラメータ（ユーザー確定値） */
-const SAMPLE_STEP = 6;         // 6px間引き
-const ROI = { xRatio: 0.62, yRatio: 0.06, wRatio: 0.35, hRatio: 0.16 }; // 右上横長（映像に対する割合）
-const TH = {
-  red:  { r:90, rn:0.40, rg:18, rb:18 },
-  green:{ g:80, gn:0.40, gr:10, gb:10 }
-};
+  async function initCamera(v){
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:{ideal:"environment"}, // 背面
+        width:{ideal:1920}, height:{ideal:1080}
+      },
+      audio:false
+    });
+    v.srcObject = stream;
+    await v.play();
+    return stream;
+  }
 
-const state = {
-  video:null, overlay:null, octx:null, badge:null, btn:null, flash:null,
-  vw:0, vh:0, verdict:'NG?'
-};
+  function layoutROI(v, roiEl, spec){
+    const W = v.clientWidth, H = v.clientHeight;
+    const w = Math.round(W * (spec.widthPct/100));
+    const h = Math.round(H * (spec.heightPct/100));
+    const top = Math.round(H * (spec.topPct/100));
+    const right = Math.round(W * (spec.rightPct/100));
+    roiEl.style.width = w+"px";
+    roiEl.style.height = h+"px";
+    roiEl.style.top = top+"px";
+    roiEl.style.left = (W - right - w) +"px"; // 右上
+  }
 
-export async function boot(){
-  // 要素取得
-  state.video   = document.getElementById('v');
-  state.overlay = document.getElementById('overlay');
-  state.octx    = state.overlay.getContext('2d');
-  state.badge   = document.getElementById('badge');
-  state.btn     = document.getElementById('shoot');
-  state.flash   = document.getElementById('flash');
-
-  // カメラ起動
-  await startCamera();
-
-  // ループ開始
-  requestAnimationFrame(loop);
-
-  // 撮影
-  state.btn.addEventListener('click', onShoot);
-}
-
-async function startCamera(){
-  // iPhone Safari向け：リアカメラ優先
-  const constraints = {
-    audio:false,
-    video:{
-      facingMode:'environment',
-      width:{ideal:1280}, height:{ideal:720}
+  function analyzeROI(ctx, x,y,w,h, step, th){
+    let rHit=0,gHit=0,total=0;
+    const data = ctx.getImageData(x,y,w,h).data;
+    for(let j=0;j<h;j+=step){
+      for(let i=0;i<w;i+=step){
+        const idx=((j*w)+i)*4;
+        const r=data[idx], g=data[idx+1], b=data[idx+2];
+        const s=r+g+b || 1;
+        const rn=r/s, gn=g/s;
+        // 赤
+        if(r>th.red.r && rn>th.red.rn && (r-g)>th.red.rg && (r-b)>th.red.rb){ rHit++; }
+        // 緑
+        if(g>th.green.g && gn>th.green.gn && (g-r)>th.green.gr && (g-b)>th.green.gb){ gHit++; }
+        total++;
+      }
     }
-  };
-  // 夜モードは少し明るめ補正（CSSはnight側で実施済み）
-  const stream = await navigator.mediaDevices.getUserMedia(constraints);
-  state.video.srcObject = stream;
-  await state.video.play();
+    return { rPct: pct(rHit,total), gPct: pct(gHit,total) };
+  }
 
-  // キャンバス初期化
-  resizeCanvas();
-  new ResizeObserver(resizeCanvas).observe(document.body);
-}
+  function drawToCanvas(video, canvas){
+    const vw = video.videoWidth, vh = video.videoHeight;
+    canvas.width = vw; canvas.height = vh;
+    const c = canvas.getContext("2d");
+    c.drawImage(video,0,0,vw,vh); // 非ミラー
+    return c;
+  }
 
-function resizeCanvas(){
-  state.vw = state.overlay.width  = state.video.videoWidth  || innerWidth;
-  state.vh = state.overlay.height = state.video.videoHeight || innerHeight;
-}
+  function stamp(c, verdict){
+    const pad = 18;
+    const t = new Date();
+    const ts = t.getFullYear().toString().padStart(4,"0")
+      + (t.getMonth()+1).toString().padStart(2,"0")
+      + t.getDate().toString().padStart(2,"0")
+      + "_" + t.getHours().toString().padStart(2,"0")
+      + t.getMinutes().toString().padStart(2,"0")
+      + t.getSeconds().toString().padStart(2,"0");
+    const W=c.canvas.width, H=c.canvas.height;
+    c.font = Math.round(W*0.035)+"px system-ui";
+    c.fillStyle="rgba(0,0,0,.55)";
+    c.fillRect(pad, H-pad-70, W*0.6, 60);
+    c.fillStyle="#fff";
+    c.fillText(ts+"  "+verdict, pad+14, H-pad-24);
+    return { ts };
+  }
 
-function loop(){
-  drawOverlay();
-  requestAnimationFrame(loop);
-}
-
-function drawOverlay(){
-  const {octx:ctx, vw, vh} = state;
-  if(!vw || !vh) return;
-
-  ctx.clearRect(0,0,vw,vh);
-
-  // ROI矩形（プレビューにのみ表示）
-  const rx = Math.round(vw*ROI.xRatio);
-  const ry = Math.round(vh*ROI.yRatio);
-  const rw = Math.round(vw*ROI.wRatio);
-  const rh = Math.round(vh*ROI.hRatio);
-
-  // 現フレームを読み取るため、一旦小さな作業キャンバスに描画
-  const work = drawVideoToWorkCanvas(vw, vh);
-  const wctx = work.getContext('2d');
-  const img  = wctx.getImageData(rx, ry, rw, rh).data;
-
-  // 6px間引きで赤/緑ピクセルをカウント
-  let rCnt=0, gCnt=0, total=0;
-  const stride = SAMPLE_STEP*4;
-  for(let y=0; y<rh; y+=SAMPLE_STEP){
-    for(let x=0; x<rw; x+=SAMPLE_STEP){
-      const i = (y*rw + x)*4;
-      const r = img[i], g = img[i+1], b = img[i+2];
-      const sum = r+g+b || 1;
-      const rn = r/sum, gn = g/sum;
-      if(r>TH.red.r && rn>TH.red.rn && (r-g)>TH.red.rg && (r-b)>TH.red.rb) rCnt++;
-      if(g>TH.green.g && gn>TH.green.gn && (g-r)>TH.green.gr && (g-b)>TH.green.gb) gCnt++;
-      total++;
+  async function captureAndSave(video, badge, flashEl, voice, verdict){
+    // フラッシュ
+    flashEl.style.opacity="1"; requestAnimationFrame(()=>flashEl.style.opacity="0");
+    // バイブ
+    if(navigator.vibrate) navigator.vibrate([40,30,40]);
+    // 音声（OK時のみ）
+    if(verdict==="OK"){
+      try{ voice.currentTime=0; await voice.play(); }catch(_){}
     }
+
+    const canvas = qs("#grab");
+    const ctx = drawToCanvas(video, canvas);   // ROIは焼き込まない
+    const meta = stamp(ctx, verdict);
+
+    canvas.toBlob(blob=>{
+      const name = `${meta.ts}_${verdict}.jpg`;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    },"image/jpeg",0.92);
   }
 
-  // 判定：緑3＞赤5 のロジックに対応（シンプルに緑優勢でOK）
-  const ok = gCnt > rCnt;
-  state.verdict = ok ? 'OK' : 'NG?';
-  updateBadge(ok);
+  window.startLampShutter = async function(CONFIG){
+    const v = qs("#v"), roiEl=qs("#roi"), badge=qs("#badge");
+    const shutterBtn = qs("#shutter"); const flashEl=qs("#flash"); const voice=qs("#okvoice");
 
-  // ROI枠（視認しやすい白）
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = 'rgba(255,255,255,.9)';
-  ctx.strokeRect(rx+.5, ry+.5, rw-1, rh-1);
-}
+    const stream = await initCamera(v);
+    const onResize = ()=> layoutROI(v, roiEl, CONFIG.roi);
+    addEventListener("resize", onResize); v.addEventListener("loadedmetadata", onResize);
+    onResize();
 
-function updateBadge(ok){
-  state.badge.textContent = ok ? 'OK' : 'NG?';
-  state.badge.className = 'badge ' + (ok ? 'ok' : 'ng');
-}
+    let okStableSince = 0, lastVerdict = "NG?";
+    const tmp = document.createElement("canvas"); const tctx = tmp.getContext("2d");
 
-function drawVideoToWorkCanvas(w,h){
-  if(!drawVideoToWorkCanvas.c){
-    const c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    drawVideoToWorkCanvas.c = c;
+    function tick(){
+      if(v.readyState>=2){
+        // draw video frame to temp canvas matching ROI area
+        const W=v.videoWidth, H=v.videoHeight;
+        tmp.width=W; tmp.height=H; tctx.drawImage(v,0,0,W,H);
+
+        // ROI座標（DOMとビデオの座標系をスケール変換）
+        const scaleX = W / v.clientWidth;
+        const scaleY = H / v.clientHeight;
+        const rx = roiEl.offsetLeft * scaleX;
+        const ry = roiEl.offsetTop  * scaleY;
+        const rw = roiEl.clientWidth * scaleX;
+        const rh = roiEl.clientHeight* scaleY;
+
+        const pr = analyzeROI(tctx, rx,ry,rw,rh, CONFIG.sampleStep, CONFIG.thresholds);
+        const isOK = (pr.gPct >= CONFIG.okRule.greenMinPct*100) && (pr.rPct <= CONFIG.okRule.redMaxPct*100);
+
+        // バッジ
+        if(isOK){ badge.textContent="OK"; badge.classList.add("ok"); }
+        else    { badge.textContent="NG?"; badge.classList.remove("ok"); }
+
+        // オートシャッター（OKがautoHoldMs継続）
+        const now = performance.now();
+        if(isOK){
+          if(lastVerdict!=="OK"){ okStableSince = now; }
+          if(now - okStableSince >= CONFIG.autoHoldMs){
+            // 一回だけ切る
+            captureAndSave(v, badge, flashEl, voice, "OK");
+            okStableSince = Number.POSITIVE_INFINITY; // 連写は別仕様
+          }
+        }else{
+          okStableSince = 0;
+        }
+        lastVerdict = isOK ? "OK" : "NG?";
+      }
+      requestAnimationFrame(tick);
+    }
+    tick();
+
+    // 手動撮影（OK/NG? どちらでも撮影）
+    shutterBtn.addEventListener("click", ()=> {
+      const verdict = badge.classList.contains("ok") ? "OK" : "NG?";
+      captureAndSave(v, badge, flashEl, voice, verdict);
+    });
+
+    // ページ離脱時に停止
+    addEventListener("pagehide", ()=> stream.getTracks().forEach(t=>t.stop()), {once:true});
   }
-  const c = drawVideoToWorkCanvas.c;
-  if(c.width!==w || c.height!==h){ c.width=w; c.height=h; }
-  const ctx = c.getContext('2d');
-  // videoをミラーしてるので左右反転を戻して描画
-  ctx.save();
-  ctx.scale(-1,1);
-  ctx.drawImage(state.video, -w, 0, w, h);
-  ctx.restore();
-  return c;
-}
-
-async function onShoot(){
-  // フラッシュ&バイブ
-  flash();
-  try{ navigator.vibrate?.(80); }catch{}
-
-  // 保存用キャンバス（ROIは描かない＝写り込まない）
-  const w = state.vw || 1280, h = state.vh || 720;
-  const c = document.createElement('canvas'); c.width=w; c.height=h;
-  const ctx = c.getContext('2d');
-  ctx.save();
-  ctx.scale(-1,1);
-  ctx.drawImage(state.video, -w, 0, w, h);
-  ctx.restore();
-
-  // 文字焼き込み（日時＋判定）
-  const ts = timeStamp();
-  const verdict = state.verdict; // OK or NG?
-  ctx.fillStyle = 'rgba(0,0,0,.55)';
-  const pad = 18, boxH=64, boxW = ctx.measureText?.(ts + '  ' + verdict).width || 480;
-  ctx.fillRect(pad, h - boxH - pad, Math.max(360, boxW+32), boxH);
-  ctx.font = 'bold 28px system-ui, -apple-system, "Segoe UI", Roboto';
-  ctx.fillStyle = '#fff';
-  ctx.fillText(ts + '   ' + verdict, pad+16, h - pad - 20);
-
-  // ファイル名
-  const fname = ts.replaceAll(/[^\d_]/g,'') + '_' + (verdict==='OK'?'OK':'NG?') + '.jpg';
-
-  // Blob化して自動DL
-  c.toBlob(blob=>{
-    const a = document.createElement('a');
-    a.download = fname;
-    a.href = URL.createObjectURL(blob);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }, 'image/jpeg', 0.92);
-
-  // OK時のみ女性音声で「オーケー」
-  if(state.verdict==='OK'){
-    try{
-      const u = new SpeechSynthesisUtterance('オーケー');
-      u.lang='ja-JP';
-      // 女性声があれば優先
-      const v = speechSynthesis.getVoices().find(v=>/ja|日本語/.test(v.lang)&&/Female|女性/i.test(v.name)) || null;
-      if(v) u.voice = v;
-      speechSynthesis.speak(u);
-    }catch{}
-  }
-}
-
-function flash(){
-  const el = state.flash;
-  el.style.transition='none';
-  el.style.opacity='1';
-  requestAnimationFrame(()=>{
-    el.style.transition='opacity 180ms ease';
-    el.style.opacity='0';
-  });
-}
-
-function timeStamp(){
-  const d = new Date();
-  const z = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
-}
+})();

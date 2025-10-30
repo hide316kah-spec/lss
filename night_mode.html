@@ -1,120 +1,45 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>夜モード - ランプシャッター</title>
+<link rel="icon" href="assets/instant_cam.png">
 <style>
-body { margin: 0; background-color: #000; overflow: hidden; text-align:center; }
-video { width: 100%; height: auto; }
-canvas { position: absolute; top: 0; left: 0; }
-#status {
-  position: absolute; top: 10px; left: 10px;
-  color: white; font-size: 26px; padding: 8px 16px;
-  border-radius: 8px; font-weight: bold;
-}
-#capture-btn {
-  position: absolute; bottom: 40px; left: 50%;
-  transform: translateX(-50%);
-  width: 120px;
-}
+  html,body{margin:0;height:100%;background:#000}
+  #stage{position:fixed;inset:0;background:#000}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:none}
+  canvas{display:none}
+  #roi{position:absolute;border:3px dashed rgba(0,255,170,.85);border-radius:10px;pointer-events:none}
+  #badge{position:absolute;top:10px;left:12px;font:800 28px/1 system-ui; padding:10px 14px;border-radius:12px;color:#fff;background:#d33;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+  #badge.ok{background:#20c05a}
+  #shutter{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);width:120px;height:120px;border-radius:24px;background:rgba(18,18,18,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
+  #shutter img{width:92px;height:92px;display:block}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .12s}
 </style>
 </head>
 <body>
-<video id="video" autoplay playsinline></video>
-<canvas id="canvas"></canvas>
-<div id="status">判定中...</div>
-<img id="capture-btn" src="assets/camera_icon.png" onclick="captureManual()">
-<audio id="ok-sound" src="assets/ok_sound.mp3"></audio>
+<div id="stage">
+  <video id="v" autoplay playsinline></video>
+  <div id="roi"></div>
+  <div id="badge">NG?</div>
+  <button id="shutter" aria-label="撮影"><img src="assets/instant_cam.png" alt=""></button>
+  <div id="flash"></div>
+  <audio id="okvoice" src="assets/ok_voice.mp3" preload="auto"></audio>
+  <canvas id="grab"></canvas>
+</div>
 
+<script src="app.js"></script>
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const statusDiv = document.getElementById('status');
-let autoCaptured = false;
-
-navigator.mediaDevices.getUserMedia({
-  video: { facingMode: "environment" }, audio: false
-}).then(stream => {
-  video.srcObject = stream;
-  video.play();
-  requestAnimationFrame(loop);
-});
-
-function loop() {
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const {ok} = analyzeFrame();
-    updateStatus(ok);
-    if (ok && !autoCaptured) {
-      autoCaptured = true;
-      captureAuto();
-      setTimeout(()=>autoCaptured=false, 3000);
-    }
-  }
-  requestAnimationFrame(loop);
-}
-
-// ▼ 夜モードの閾値（甘め設定）
-function analyzeFrame() {
-  const roi = { x: canvas.width*0.58, y: canvas.height*0.05,
-                w: canvas.width*0.38, h: canvas.height*0.14 };
-  const img = ctx.getImageData(roi.x, roi.y, roi.w, roi.h).data;
-  let red=0, green=0;
-  for (let i=0; i<img.length; i+=4*6) {
-    const r=img[i], g=img[i+1], b=img[i+2];
-    const rn=r/(r+g+b+1), gn=g/(r+g+b+1);
-    if (r>70 && rn>0.35 && r-g>14 && r-b>14) red++;
-    if (g>60 && gn>0.35 && g-r>8 && g-b>8) green++;
-  }
-  const total=img.length/4/6;
-  const redRate=red/total, greenRate=green/total;
-  return {ok: (redRate<0.01 && greenRate>=0.01)};
-}
-
-function updateStatus(ok) {
-  if (ok) { statusDiv.textContent="OK"; statusDiv.style.background="#00CC00"; }
-  else { statusDiv.textContent="NG?"; statusDiv.style.background="#CC0000"; }
-}
-
-function captureAuto() {
-  document.getElementById("ok-sound").play();
-  flash();
-  saveImage("OK");
-}
-
-function captureManual() {
-  flash();
-  saveImage(statusDiv.textContent);
-}
-
-function flash() {
-  const flashDiv=document.createElement("div");
-  flashDiv.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;";
-  document.body.appendChild(flashDiv);
-  setTimeout(()=>flashDiv.remove(),100);
-}
-
-function saveImage(result) {
-  const outCanvas=document.createElement("canvas");
-  outCanvas.width=canvas.width; outCanvas.height=canvas.height;
-  const octx=outCanvas.getContext("2d");
-  octx.drawImage(video,0,0,canvas.width,canvas.height);
-  octx.fillStyle="white";
-  octx.font="40px sans-serif";
-  const now=new Date().toISOString().replace(/[-T:\.Z]/g,"");
-  const label=`${now}_${result}`;
-  octx.fillText(label,40,60);
-  outCanvas.toBlob(blob=>{
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=`${label}.jpg`;
-    a.click();
-  },"image/jpeg",0.9);
-}
+  // 夜＝甘め（白飛びしやすいので優先度は“支配色”判定気味）
+  const CONFIG = {
+    mode: 'night',
+    roi: { topPct: 7, rightPct: 3, widthPct: 44, heightPct: 22 }, // 形は固定
+    thresholds: {
+      red:   { r: 90, rn: 0.40, rg: 18, rb: 18 },
+      green: { g: 80, gn: 0.40, gr: 10, gb: 10 }
+    },
+    sampleStep: 6,
+    okRule: { greenMinPct: 0.7, redMaxPct: 0.9 }, // 夜は緩め
+    autoHoldMs: 300
+  };
+  window.startLampShutter(CONFIG);
 </script>
-</body>
-</html>
+</body></html>
