@@ -5,61 +5,51 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ランプシャッター</title>
 <link rel="manifest" href="manifest.json">
-<link rel="preload" href="app.js" as="script">
 <style>
-:root { --bg:#0b0e11; --tx:#fff; --accent:#1f6bff; }
-*{box-sizing:border-box} html,body{margin:0;height:100%;background:#061018;color:var(--tx);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto}
-.wrap{max-width:720px;margin:0 auto;padding:24px}
-h1{font-size:34px;letter-spacing:.04em;margin:8px 0 6px}
-.pretxt{opacity:.8;margin:0 0 16px}
-.card{display:block;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.35);margin:18px 0;text-decoration:none}
-.card .row{display:flex;align-items:center;gap:16px;padding:16px}
-.card .thumb{flex:0 0 112px;height:112px;border-radius:12px;overflow:hidden;background:#0003;display:grid;place-items:center}
-.card .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.card .txt{flex:1}
-.badge{display:inline-block;background:#0009;color:#fff;padding:6px 10px;border-radius:999px;font-weight:700;letter-spacing:.05em}
-.card.day{background:linear-gradient(135deg,#b00020 0%,#ff4d00 40%,#cc0000 100%)}
-.card.night{background:linear-gradient(135deg,#0036b0 0%,#006dff 45%,#0030a8 100%)}
-.card.day .badge{background:#000c}
-.card.night .badge{background:#000c}
-.note{opacity:.8;margin:10px 2px 0;font-size:14px}
-.center{display:grid;place-items:center;margin:10px 0 2px}
-.btn{appearance:none;border:0;background:#17c964;color:#002; padding:14px 22px;border-radius:12px;font-weight:800;font-size:16px}
+html,body{
+  margin:0;
+  height:100%;
+  background:#061018;
+  color:#fff;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
+}
+.wrap{
+  max-width:720px;
+  margin:0 auto;
+  padding:20px;
+  text-align:center;
+}
+h1{font-size:34px;margin:10px 0 6px}
+.sub{opacity:.85;margin-bottom:16px}
+.card{
+  display:block;
+  border-radius:18px;
+  overflow:hidden;
+  margin:18px 0;
+  box-shadow:0 10px 24px rgba(0,0,0,.35);
+  transition:transform .15s;
+}
+.card:active{transform:scale(.97)}
+.card img{width:100%;display:block}
+.note{opacity:.8;margin-top:8px;font-size:14px;line-height:1.4}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>ランプシャッター</h1>
-  <p class="pretxt">いずれかをタップして判定を開始</p>
+  <p class="sub">いずれかをタップして判定を開始！</p>
 
-  <!-- 上：昼モード（おっさん） -->
-  <a class="card day" href="day_mode.html">
-    <div class="row">
-      <div class="thumb">
-        <!-- イラスト：assets/hero_day.png（おっさん） -->
-        <img src="assets/hero_day.png" alt="昼モード">
-      </div>
-      <div class="txt">
-        <div class="badge">昼モード（厳しめ）</div>
-      </div>
-    </div>
+  <!-- 昼モード -->
+  <a href="day_mode.html" class="card">
+    <img src="assets/hero_day.png" alt="昼モード">
   </a>
 
-  <!-- 下：夜モード（女の子） -->
-  <a class="card night" href="night_mode.html">
-    <div class="row">
-      <div class="thumb">
-        <!-- イラスト：assets/hero_night.png（女の子） -->
-        <img src="assets/hero_night.png" alt="夜モード">
-      </div>
-      <div class="txt">
-        <div class="badge">夜モード（甘め）</div>
-      </div>
-    </div>
+  <!-- 夜モード -->
+  <a href="night_mode.html" class="card">
+    <img src="assets/hero_night.png" alt="夜モード">
   </a>
 
   <p class="note">※タップ後にカメラ・保存の許可を求めます（背面カメラ固定／非ミラー）。</p>
 </div>
-<script defer src="app.js"></script>
 </body>
 </html>
