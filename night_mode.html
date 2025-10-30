@@ -1,90 +1,120 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>夜モード | ランプシャッター</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>夜モード - ランプシャッター</title>
 <style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden}
-#wrap{position:fixed;inset:0}
-video#pv{position:absolute;inset:0;object-fit:cover;width:100%;height:100%;
-         filter:brightness(1.2) contrast(1.2);transform:none}
-.roi{position:absolute;top:12px;right:12px;width:42%;height:11%;border:3px dashed rgba(255,255,0,.9);border-radius:8px}
-.badge{position:absolute;top:10px;left:10px;padding:8px 14px;border-radius:10px;font-weight:900;font-size:28px;color:#fff}
-.ok{background:#16c65b}
-.ng{background:#e03434}
-.shutter{position:absolute;left:50%;bottom:8vh;transform:translateX(-50%);
-         width:min(120px,28vw);height:min(120px,28vw);border-radius:22px;background:rgba(0,0,0,.25);
-         display:grid;place-items:center;backdrop-filter:blur(4px)}
-.shutter img{width:78%;height:78%;object-fit:contain;pointer-events:none}
+body { margin: 0; background-color: #000; overflow: hidden; text-align:center; }
+video { width: 100%; height: auto; }
+canvas { position: absolute; top: 0; left: 0; }
+#status {
+  position: absolute; top: 10px; left: 10px;
+  color: white; font-size: 26px; padding: 8px 16px;
+  border-radius: 8px; font-weight: bold;
+}
+#capture-btn {
+  position: absolute; bottom: 40px; left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+}
 </style>
 </head>
 <body>
-<div id="wrap">
-  <video id="pv" playsinline autoplay muted></video>
-  <div id="roi" class="roi" aria-hidden="true"></div>
-  <div id="badge" class="badge">…</div>
-  <button id="shot" class="shutter" aria-label="撮影">
-    <img src="assets/instant_camera.png" alt="">
-  </button>
-</div>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+<div id="status">判定中...</div>
+<img id="capture-btn" src="assets/camera_icon.png" onclick="captureManual()">
+<audio id="ok-sound" src="assets/ok_sound.mp3"></audio>
 
-<script type="module">
-const pv=document.getElementById('pv');
-const badge=document.getElementById('badge');
-const roi=document.getElementById('roi');
-const shot=document.getElementById('shot');
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusDiv = document.getElementById('status');
+let autoCaptured = false;
 
-const stream=await navigator.mediaDevices.getUserMedia({
-  video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
-pv.srcObject=stream;
+navigator.mediaDevices.getUserMedia({
+  video: { facingMode: "environment" }, audio: false
+}).then(stream => {
+  video.srcObject = stream;
+  video.play();
+  requestAnimationFrame(loop);
+});
 
-const work=document.createElement('canvas'),wctx=work.getContext('2d',{willReadFrequently:true});
-const save=document.createElement('canvas'),sctx=save.getContext('2d');
-
-const ROI_RATE={x:0.58,y:0.05,w:0.38,h:0.14};
-
-function getRect(){
-  const v=pv.getBoundingClientRect(), vw=pv.videoWidth, vh=pv.videoHeight;
-  return {x:vw*ROI_RATE.x,y:vh*ROI_RATE.y,w:vw*ROI_RATE.w,h:vh*ROI_RATE.h};
-}
-
-function judge(){
-  if(!(pv.videoWidth&&pv.videoHeight))return;
-  const r=getRect();work.width=r.w;work.height=r.h;
-  wctx.drawImage(pv,r.x,r.y,r.w,r.h,0,0,r.w,r.h);
-  const im=wctx.getImageData(0,0,r.w,r.h).data;
-  let R=0,G=0,cnt=0;
-  for(let y=0;y<r.h;y+=6){
-    for(let x=0;x<r.w;x+=6){
-      const i=(y*r.w+x)*4;const rr=im[i],gg=im[i+1],bb=im[i+2];
-      const sum=rr+gg+bb||1;const rn=rr/sum,gn=gg/sum;
-      if(rr>60&&rn>0.35&&(rr-gg)>15&&(rr-bb)>15)R++;
-      if(gg>50&&gn>0.35&&(gg-rr)>8&&(gg-bb)>8)G++;
-      cnt++;
+function loop() {
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const {ok} = analyzeFrame();
+    updateStatus(ok);
+    if (ok && !autoCaptured) {
+      autoCaptured = true;
+      captureAuto();
+      setTimeout(()=>autoCaptured=false, 3000);
     }
   }
-  const ok=G>R;
-  badge.className='badge '+(ok?'ok':'ng');
-  badge.textContent=ok?'OK':'NG?';
-  return ok;
+  requestAnimationFrame(loop);
 }
-setInterval(judge,33);
 
-shot.onclick=async()=>{
-  const ok=judge();
-  const vw=pv.videoWidth,vh=pv.videoHeight;
-  save.width=vw;save.height=vh;
-  sctx.drawImage(pv,0,0,vw,vh);
-  const now=new Date(),ts=now.toISOString().replace(/[-:T]/g,'').slice(0,14);
-  const text=ok?'OK':'NG?';
-  sctx.font=`${Math.round(vh*0.04)}px system-ui`;sctx.fillStyle='#fff';sctx.strokeStyle='rgba(0,0,0,.6)';sctx.lineWidth=6;
-  sctx.strokeText(`${ts} ${text}`,24,vh-24);sctx.fillText(`${ts} ${text}`,24,vh-24);
-  const fname=`${ts}_${text}.jpg`;
-  const blob=await new Promise(r=>save.toBlob(r,'image/jpeg',0.92));
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
-  if(ok){new Audio('assets/ok_voice_female.mp3').play().catch(()=>{});}
-};
+// ▼ 夜モードの閾値（甘め設定）
+function analyzeFrame() {
+  const roi = { x: canvas.width*0.58, y: canvas.height*0.05,
+                w: canvas.width*0.38, h: canvas.height*0.14 };
+  const img = ctx.getImageData(roi.x, roi.y, roi.w, roi.h).data;
+  let red=0, green=0;
+  for (let i=0; i<img.length; i+=4*6) {
+    const r=img[i], g=img[i+1], b=img[i+2];
+    const rn=r/(r+g+b+1), gn=g/(r+g+b+1);
+    if (r>70 && rn>0.35 && r-g>14 && r-b>14) red++;
+    if (g>60 && gn>0.35 && g-r>8 && g-b>8) green++;
+  }
+  const total=img.length/4/6;
+  const redRate=red/total, greenRate=green/total;
+  return {ok: (redRate<0.01 && greenRate>=0.01)};
+}
+
+function updateStatus(ok) {
+  if (ok) { statusDiv.textContent="OK"; statusDiv.style.background="#00CC00"; }
+  else { statusDiv.textContent="NG?"; statusDiv.style.background="#CC0000"; }
+}
+
+function captureAuto() {
+  document.getElementById("ok-sound").play();
+  flash();
+  saveImage("OK");
+}
+
+function captureManual() {
+  flash();
+  saveImage(statusDiv.textContent);
+}
+
+function flash() {
+  const flashDiv=document.createElement("div");
+  flashDiv.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;background:white;opacity:0.8;z-index:9999;";
+  document.body.appendChild(flashDiv);
+  setTimeout(()=>flashDiv.remove(),100);
+}
+
+function saveImage(result) {
+  const outCanvas=document.createElement("canvas");
+  outCanvas.width=canvas.width; outCanvas.height=canvas.height;
+  const octx=outCanvas.getContext("2d");
+  octx.drawImage(video,0,0,canvas.width,canvas.height);
+  octx.fillStyle="white";
+  octx.font="40px sans-serif";
+  const now=new Date().toISOString().replace(/[-T:\.Z]/g,"");
+  const label=`${now}_${result}`;
+  octx.fillText(label,40,60);
+  outCanvas.toBlob(blob=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`${label}.jpg`;
+    a.click();
+  },"image/jpeg",0.9);
+}
 </script>
 </body>
 </html>

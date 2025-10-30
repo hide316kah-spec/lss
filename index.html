@@ -1,62 +1,61 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>ランプシャッター</title>
-  <link rel="manifest" href="manifest.json"/>
-  <style>
-    body{margin:0;background:#0b0b0f;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto}
-    h1{font-size:34px;margin:48px 24px 8px}
-    p.sub{opacity:.75;margin:0 24px 28px}
-    .row{display:flex;gap:28px;justify-content:center;margin:40px 0}
-    .btn{min-width:240px;border-radius:24px;padding:26px 0;font-weight:800;font-size:28px;cursor:pointer}
-    .day{background:#2253ff;color:#fff;border:none;box-shadow:0 8px 30px rgba(34,83,255,.35)}
-    .night{background:#111;color:#fff;border:2px solid #41f5ff}
-    /* 許可ポップ（イラストタップ） */
-    .gate{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:9999}
-    .gate-card{width:min(520px,90vw);background:#121218;border:1px solid #2a2a3a;border-radius:20px;padding:24px;text-align:center}
-    .gate-img{width:120px;height:120px;margin:8px auto 16px;display:block}
-    .gate-title{font-weight:800;font-size:22px;margin:0 0 10px}
-    .gate-note{font-size:14px;opacity:.8;line-height:1.6;margin-bottom:16px}
-    .gate-tap{display:inline-block;padding:14px 22px;background:#00d28f;border-radius:14px;font-weight:800}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ランプシャッター</title>
+<style>
+body {
+  background-color: #e0f0ff;
+  font-family: sans-serif;
+  text-align: center;
+  margin: 0;
+}
+h2 { margin-top: 1.5em; }
+.mode-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 40px;
+}
+.mode {
+  cursor: pointer;
+  width: 45%;
+}
+.mode img {
+  width: 100%;
+  border-radius: 10px;
+}
+p {
+  font-size: 20px;
+  color: #003366;
+  margin-top: 30px;
+}
+</style>
 </head>
 <body>
-  <!-- 許可ポップ（固定仕様） -->
-  <div id="gate" class="gate">
-    <div class="gate-card">
-      <img src="assets/permit_illustration.png" alt="" class="gate-img">
-      <div class="gate-title">ここをタップすると判定開始！</div>
-      <div class="gate-note">音声（OKの女性音声）と「撮影→自動保存準備」を有効にします。iOSは最終保存で共有シート操作が必要です。</div>
-      <a id="gateBtn" class="gate-tap">はじめる</a>
-    </div>
+<h2>ランプシャッター</h2>
+<div class="mode-container">
+  <div class="mode" onclick="startMode('day')">
+    <img src="assets/day_icon.png" alt="昼モード">
+    <p>昼モード</p>
   </div>
-
-  <h1>ランプシャッター</h1>
-  <p class="sub">昼／夜を選んでください（UIは固定・変更禁止）</p>
-
-  <div class="row">
-    <button class="btn day"   onclick="go('day')">昼モード</button>
-    <button class="btn night" onclick="go('night')">夜モード</button>
+  <div class="mode" onclick="startMode('night')">
+    <img src="assets/night_icon.png" alt="夜モード">
+    <p>夜モード</p>
   </div>
+</div>
+<p>ここをタップすると判定開始！</p>
 
-  <script>
-    // 許可ポップ：初回タップでAudio解放・保存準備フラグ
-    const gate   = document.getElementById('gate');
-    const gateBtn= document.getElementById('gateBtn');
-    gateBtn.addEventListener('click', async () => {
-      try{
-        // 無音のAudioContextを一度起こしてiOSの再生許可を掴む
-        const ac = new (window.AudioContext||window.webkitAudioContext)();
-        const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1,1,22050); s.connect(ac.destination); s.start(0);
-      }catch(e){}
-      localStorage.setItem('ls_audio_ok','1');
-      localStorage.setItem('ls_save_ok','1'); // 自動保存準備フラグ（最終保存は共有シート）
-      gate.remove();
-    });
-
-    function go(mode){ location.href = (mode==='day' ? 'day_mode.html' : 'night_mode.html'); }
-  </script>
+<script>
+function startMode(mode) {
+  navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    .then(() => {
+      if (mode === 'day') location.href = 'day_mode.html';
+      else location.href = 'night_mode.html';
+    })
+    .catch(err => alert('カメラアクセスが拒否されました。設定を確認してください。'));
+}
+</script>
 </body>
 </html>
