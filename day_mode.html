@@ -15,8 +15,8 @@ html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,
   position:fixed;
   right:2%;
   top:6%;
-  width:60%;
-  height:35%;
+  width:45%;
+  height:25%;
   border:3px dashed #39e3a5;
   border-radius:10px;
   z-index:25;
@@ -54,6 +54,23 @@ html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,
   z-index:50;
   transition:opacity .15s;
 }
+
+/* ライブ統計（プレビュー専用HUD） */
+#live-stats{
+  position:fixed; left:16px; bottom:18px;
+  display:flex; gap:10px; z-index:30;
+  pointer-events:none;
+}
+#live-stats .chip{
+  display:inline-flex; align-items:center;
+  padding:6px 10px; border-radius:8px;
+  background:rgba(0,0,0,.55); backdrop-filter:blur(4px);
+  font:600 14px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#fff; letter-spacing:.3px;
+}
+#live-stats .chip-red   b{ color:#ff6b6b; }
+#live-stats .chip-green b{ color:#39e36f; }
+@media (max-width:430px){ #live-stats{ bottom:82px; } }
 </style>
 </head>
 <body>
@@ -62,6 +79,13 @@ html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,
 <video id="preview" autoplay playsinline muted></video>
 <button id="cam"><img src="assets/camera.png" alt="カメラ"></button>
 <div id="flash"></div>
+
+<!-- ライブ統計（プレビュー専用） -->
+<div id="live-stats" aria-hidden="true">
+  <span class="chip chip-red">R: <b id="stat-red">0.0%</b></span>
+  <span class="chip chip-green">G: <b id="stat-green">0.0%</b></span>
+</div>
+
 <script>window.LS_MODE="day";</script>
 <script defer src="app.js"></script>
 </body>

@@ -6,14 +6,26 @@ const CFG={
    green:(r,g,b)=>(g>80)&&(g/(r+g+b)>0.40)&&((g-r)>10)&&((g-b)>10),
  },
  mode:{
-   day:{gRatioOK:0.020,rRatioMax:0.006}, // 厳しめ
-   night:{gRatioOK:0.015,rRatioMax:0.010} // 甘め
+   // 昼＝かなり緩く
+   day:{ gRatioOK:0.010, rRatioMax:0.020 },
+   // 夜＝甘め
+   night:{ gRatioOK:0.015, rRatioMax:0.010 }
  },
  fileName:(ok)=>{
    const d=new Date(),z=n=>String(n).padStart(2,"0");
    return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}_${ok?'OK':'NG?'}.jpg`;
  }
 };
+
+// --- ライブ統計表示 ---
+function updateLiveStats(redCount, greenCount, sampleCount){
+  const redPct   = sampleCount ? (redCount   / sampleCount * 100) : 0;
+  const greenPct = sampleCount ? (greenCount / sampleCount * 100) : 0;
+  const rEl = document.getElementById('stat-red');
+  const gEl = document.getElementById('stat-green');
+  if(rEl) rEl.textContent = redPct.toFixed(1) + '%';
+  if(gEl) gEl.textContent = greenPct.toFixed(1) + '%';
+}
 
 const v=document.getElementById('preview');
 const roi=document.getElementById('roi');
@@ -35,8 +47,8 @@ if(v&&roi&&st&&cam){
    const w=v.videoWidth,h=v.videoHeight;
    if(w&&h){
     c.width=w;c.height=h;x.drawImage(v,0,0,w,h);
-    const rx=Math.round(w*0.40),ry=Math.round(h*0.06);
-    const rw=Math.round(w*0.60),rh=Math.round(h*0.35);
+    const rx=Math.round(w*0.53),ry=Math.round(h*0.06);
+    const rw=Math.round(w*0.45),rh=Math.round(h*0.25);
     let rc=0,gc=0,t=0,step=CFG.sampleStep;
     for(let y=ry;y<ry+rh;y+=step){
      for(let i=rx;i<rx+rw;i+=step){
@@ -52,6 +64,7 @@ if(v&&roi&&st&&cam){
     const ok=(gr>=M.gRatioOK)&&(rr<=M.rRatioMax);
     st.textContent=ok?"OK":"NG?";
     st.className=`badge ${ok?'ok':'ng'}`;
+    updateLiveStats(rc,gc,t);
     const now=performance.now();
     if(ok&&(!window._lsLast||now-window._lsLast>1200)){
       window._lsLast=now; takeShot("auto",x,w,h,ok);
