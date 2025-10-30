@@ -1,37 +1,90 @@
-<!doctype html><html lang="ja">
+<!doctype html>
+<html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>夜モード | ランプシャッター</title>
-<link rel="preload" as="script" href="app.js">
 <style>
-  :root { color-scheme: dark; }
-  body{margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto;touch-action:none}
-  #stage{position:relative;inline-size:100%;block-size:100dvh;background:#000;overflow:hidden}
-  video{position:absolute;inset:0;inline-size:100%;block-size:100%;object-fit:cover;transform:scaleX(-1); filter:brightness(1.15) contrast(1.15);}
-  canvas#overlay{position:absolute;inset:0;pointer-events:none}
-  .badge{position:absolute;left:10px;top:10px;padding:.35em .6em;border-radius:10px;font-weight:800;font-size:22px}
-  .ok{background:#00CC00;color:#fff}
-  .ng{background:#FF3333;color:#fff}
-  .shoot{position:absolute;left:50%;bottom:24px;translate:-50% 0;background:#fff;color:#111;
-         width:88px;height:88px;border-radius:18px;border:4px solid #111;display:grid;place-items:center;
-         box-shadow:0 14px 40px rgba(0,0,0,.55);font-weight:900}
-  .shoot::before{content:"📸";font-size:36px}
-  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+#wrap{position:fixed;inset:0}
+video#pv{position:absolute;inset:0;object-fit:cover;width:100%;height:100%;
+         filter:brightness(1.2) contrast(1.2);transform:none}
+.roi{position:absolute;top:12px;right:12px;width:42%;height:11%;border:3px dashed rgba(255,255,0,.9);border-radius:8px}
+.badge{position:absolute;top:10px;left:10px;padding:8px 14px;border-radius:10px;font-weight:900;font-size:28px;color:#fff}
+.ok{background:#16c65b}
+.ng{background:#e03434}
+.shutter{position:absolute;left:50%;bottom:8vh;transform:translateX(-50%);
+         width:min(120px,28vw);height:min(120px,28vw);border-radius:22px;background:rgba(0,0,0,.25);
+         display:grid;place-items:center;backdrop-filter:blur(4px)}
+.shutter img{width:78%;height:78%;object-fit:contain;pointer-events:none}
 </style>
 </head>
 <body>
-  <div id="stage">
-    <video id="v" playsinline autoplay muted></video>
-    <canvas id="overlay"></canvas>
-    <div id="badge" class="badge ng">NG?</div>
-    <button id="shoot" class="shoot" aria-label="撮影"></button>
-    <div id="flash" class="flash"></div>
-  </div>
-  <script type="module">
-    import { boot, setMode } from './app.js';
-    setMode('night');
-    boot();
-  </script>
+<div id="wrap">
+  <video id="pv" playsinline autoplay muted></video>
+  <div id="roi" class="roi" aria-hidden="true"></div>
+  <div id="badge" class="badge">…</div>
+  <button id="shot" class="shutter" aria-label="撮影">
+    <img src="assets/instant_camera.png" alt="">
+  </button>
+</div>
+
+<script type="module">
+const pv=document.getElementById('pv');
+const badge=document.getElementById('badge');
+const roi=document.getElementById('roi');
+const shot=document.getElementById('shot');
+
+const stream=await navigator.mediaDevices.getUserMedia({
+  video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+pv.srcObject=stream;
+
+const work=document.createElement('canvas'),wctx=work.getContext('2d',{willReadFrequently:true});
+const save=document.createElement('canvas'),sctx=save.getContext('2d');
+
+const ROI_RATE={x:0.58,y:0.05,w:0.38,h:0.14};
+
+function getRect(){
+  const v=pv.getBoundingClientRect(), vw=pv.videoWidth, vh=pv.videoHeight;
+  return {x:vw*ROI_RATE.x,y:vh*ROI_RATE.y,w:vw*ROI_RATE.w,h:vh*ROI_RATE.h};
+}
+
+function judge(){
+  if(!(pv.videoWidth&&pv.videoHeight))return;
+  const r=getRect();work.width=r.w;work.height=r.h;
+  wctx.drawImage(pv,r.x,r.y,r.w,r.h,0,0,r.w,r.h);
+  const im=wctx.getImageData(0,0,r.w,r.h).data;
+  let R=0,G=0,cnt=0;
+  for(let y=0;y<r.h;y+=6){
+    for(let x=0;x<r.w;x+=6){
+      const i=(y*r.w+x)*4;const rr=im[i],gg=im[i+1],bb=im[i+2];
+      const sum=rr+gg+bb||1;const rn=rr/sum,gn=gg/sum;
+      if(rr>60&&rn>0.35&&(rr-gg)>15&&(rr-bb)>15)R++;
+      if(gg>50&&gn>0.35&&(gg-rr)>8&&(gg-bb)>8)G++;
+      cnt++;
+    }
+  }
+  const ok=G>R;
+  badge.className='badge '+(ok?'ok':'ng');
+  badge.textContent=ok?'OK':'NG?';
+  return ok;
+}
+setInterval(judge,33);
+
+shot.onclick=async()=>{
+  const ok=judge();
+  const vw=pv.videoWidth,vh=pv.videoHeight;
+  save.width=vw;save.height=vh;
+  sctx.drawImage(pv,0,0,vw,vh);
+  const now=new Date(),ts=now.toISOString().replace(/[-:T]/g,'').slice(0,14);
+  const text=ok?'OK':'NG?';
+  sctx.font=`${Math.round(vh*0.04)}px system-ui`;sctx.fillStyle='#fff';sctx.strokeStyle='rgba(0,0,0,.6)';sctx.lineWidth=6;
+  sctx.strokeText(`${ts} ${text}`,24,vh-24);sctx.fillText(`${ts} ${text}`,24,vh-24);
+  const fname=`${ts}_${text}.jpg`;
+  const blob=await new Promise(r=>save.toBlob(r,'image/jpeg',0.92));
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
+  if(ok){new Audio('assets/ok_voice_female.mp3').play().catch(()=>{});}
+};
+</script>
 </body>
 </html>
