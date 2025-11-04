@@ -1,26 +1,32 @@
 // ==============================
-// ランプシャッター最終版 app.js
+// ランプシャッター最終安定版 app.js（モード修正版）
 // ==============================
 
 // --- 定数設定 ---
 const GREEN_RATIO_MIN = { day: 0.01, night: 0.04 }; // 緑LEDの閾値（昼1%, 夜4%）
 const RED_THRESHOLD = 0.02; // 赤LEDの閾値（全体比）
-const ROI = { x: 0.65, y: 0.05, w: 0.3, h: 0.25 }; // ROI右上横長
-let mode = localStorage.getItem("mode") || "day";
+const ROI = { x: 0.65, y: 0.05, w: 0.3, h: 0.25 }; // ROI右上横長固定
 
-// --- 要素取得 ---
+// --- モード設定（URL or LocalStorage両対応） ---
+const urlParams = new URLSearchParams(window.location.search);
+let mode = urlParams.get("mode") || localStorage.getItem("mode") || "day";
+localStorage.setItem("mode", mode);
+
+// --- 要素生成 ---
 const video = document.createElement("video");
 video.autoplay = true;
 video.playsInline = true;
+
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d");
 document.body.appendChild(canvas);
 
+// --- 結果表示エリア ---
 const resultBox = document.createElement("div");
 resultBox.style.position = "fixed";
 resultBox.style.top = "20px";
 resultBox.style.left = "20px";
-resultBox.style.padding = "5px 10px";
+resultBox.style.padding = "5px 15px";
 resultBox.style.fontSize = "32px";
 resultBox.style.fontWeight = "bold";
 resultBox.style.borderRadius = "8px";
@@ -28,6 +34,7 @@ resultBox.style.color = "white";
 resultBox.style.background = "rgba(0,0,0,0.5)";
 document.body.appendChild(resultBox);
 
+// --- %表示 ---
 const percentBox = document.createElement("div");
 percentBox.style.position = "fixed";
 percentBox.style.bottom = "20px";
@@ -36,7 +43,7 @@ percentBox.style.fontSize = "20px";
 percentBox.style.color = "white";
 document.body.appendChild(percentBox);
 
-// --- サウンド設定 ---
+// --- 音声・振動設定 ---
 const okSound = new Audio("ok_voice.mp3");
 
 // --- カメラ起動 ---
@@ -51,7 +58,7 @@ navigator.mediaDevices
   })
   .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
-// --- 判定ループ ---
+// --- 判定処理ループ ---
 let lastResult = "";
 function drawLoop() {
   const vw = video.videoWidth;
@@ -60,11 +67,12 @@ function drawLoop() {
     requestAnimationFrame(drawLoop);
     return;
   }
+
   canvas.width = vw;
   canvas.height = vh;
   ctx.drawImage(video, 0, 0, vw, vh);
 
-  // ROI枠（点線のみ）
+  // ROI描画（点線のみ）
   ctx.strokeStyle = "rgba(0,255,128,0.5)";
   ctx.lineWidth = 3;
   ctx.setLineDash([10, 10]);
@@ -75,6 +83,7 @@ function drawLoop() {
   ctx.strokeRect(rx, ry, rw, rh);
   ctx.setLineDash([]);
 
+  // ROI領域データ取得
   const imgData = ctx.getImageData(rx, ry, rw, rh);
   const pixels = imgData.data;
   let rCount = 0,
@@ -86,7 +95,7 @@ function drawLoop() {
     const g = pixels[i + 1];
     const b = pixels[i + 2];
     const brightness = (r + g + b) / 3;
-    if (brightness < 50) continue; // 暗部・反射を無視
+    if (brightness < 50) continue; // 暗い部分は無視
     if (g > r * 1.4 && g > b * 1.2 && g > 90) gCount++;
     if (r > g * 1.4 && r > b * 1.2 && r > 90) rCount++;
     total++;
@@ -94,21 +103,23 @@ function drawLoop() {
 
   const gRatio = gCount / total;
   const rRatio = rCount / total;
+
   percentBox.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(
     gRatio * 100
   ).toFixed(1)}%`;
 
+  // --- 判定 ---
   let result = "NG?";
   if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD) {
     result = "OK";
   }
 
-  // 結果表示
+  // --- 表示更新 ---
   resultBox.textContent = result;
   resultBox.style.background =
     result === "OK" ? "rgba(0,200,0,0.8)" : "rgba(200,0,0,0.8)";
 
-  // OK時のみ自動シャッター
+  // --- 自動シャッター（OK時） ---
   if (result === "OK" && lastResult !== "OK") {
     triggerShutter();
   }
@@ -117,7 +128,7 @@ function drawLoop() {
   requestAnimationFrame(drawLoop);
 }
 
-// --- 自動シャッター処理 ---
+// --- 自動シャッター ---
 function triggerShutter() {
   flashEffect();
   okSound.play();
