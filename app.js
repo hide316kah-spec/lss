@@ -1,10 +1,9 @@
 // ==============================
-// ランプシャッター app.js（動作安定・保存＋誤判定修正版）
+// ランプシャッター app.js（完全安定・DOM同期版）
 // ==============================
 
-if (window.__LS_RUNNING__) {
-  console.warn("already running");
-} else {
+window.addEventListener("DOMContentLoaded", () => {
+  if (window.__LS_RUNNING__) return;
   window.__LS_RUNNING__ = true;
 
   const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 };
@@ -17,6 +16,11 @@ if (window.__LS_RUNNING__) {
   const flash = document.getElementById("flash");
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
+
+  if (!video || !camBtn) {
+    alert("HTML構成エラー：video または cam ボタンが見つかりません。");
+    return;
+  }
 
   // --- カメラ起動 ---
   navigator.mediaDevices
@@ -53,7 +57,6 @@ if (window.__LS_RUNNING__) {
       const ry = vh * ROI.y;
       const rw = vw * ROI.w;
       const rh = vh * ROI.h;
-
       const imgData = ctx.getImageData(rx, ry, rw, rh);
       const pixels = imgData.data;
       let rCount = 0, gCount = 0, total = 0;
@@ -72,7 +75,6 @@ if (window.__LS_RUNNING__) {
       const gRatio = gCount / total;
       const rRatio = rCount / total;
 
-      // --- R/G% 表示 ---
       let stat = document.getElementById("live-stats");
       if (!stat) {
         stat = document.createElement("div");
@@ -89,7 +91,7 @@ if (window.__LS_RUNNING__) {
         gRatio * 100
       ).toFixed(1)}%`;
 
-      // --- 判定（誤検知対策）---
+      // --- 判定（誤検知防止）---
       let result = "NG?";
       if (
         gRatio > GREEN_RATIO_MIN[mode] &&
@@ -99,7 +101,7 @@ if (window.__LS_RUNNING__) {
         result = "OK";
       }
 
-      // --- 結果表示 ---
+      // --- 表示更新 ---
       statusEl.textContent = result;
       statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
 
@@ -121,7 +123,6 @@ if (window.__LS_RUNNING__) {
 
   // --- 撮影処理 ---
   function triggerShot(auto) {
-    // フラッシュ＋バイブ
     flash.style.transition = "opacity 0.15s";
     flash.style.opacity = 0.9;
     setTimeout(() => (flash.style.opacity = 0), 150);
@@ -151,7 +152,6 @@ if (window.__LS_RUNNING__) {
       d.getHours()
     )}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
 
-    // --- 共有シート or DL ---
     canvas.toBlob((blob) => {
       const file = new File([blob], ts, { type: "image/jpeg" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -169,4 +169,4 @@ if (window.__LS_RUNNING__) {
       }
     }, "image/jpeg", 0.92);
   }
-}
+});
