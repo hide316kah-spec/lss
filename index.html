@@ -40,16 +40,35 @@ h1{font-size:34px;margin:10px 0 6px}
   <p class="sub">ここをタップすると判定開始！</p>
 
   <!-- 昼モード -->
-  <a href="day_mode.html" class="card" onclick="localStorage.setItem('LS_USER_TAPPED','1')">
+  <a href="day_mode.html" class="card" onclick="LS_preGrant()">
     <img src="assets/hero_day.png" alt="昼モード">
   </a>
 
   <!-- 夜モード -->
-  <a href="night_mode.html" class="card" onclick="localStorage.setItem('LS_USER_TAPPED','1')">
+  <a href="night_mode.html" class="card" onclick="LS_preGrant()">
     <img src="assets/hero_night.png" alt="夜モード">
   </a>
 
   <p class="note">※タップ後にカメラ・保存の許可を求めます（背面カメラ固定／非ミラー）。</p>
 </div>
+
+<script>
+function LS_preGrant(){
+  try {
+    localStorage.setItem('LS_USER_TAPPED','1');
+    // Safariに操作イベントを与えるためのダミー共有
+    const blob = new Blob(["ランプシャッター権限確認"], {type:"text/plain"});
+    const file = new File([blob], "grant.txt", {type:"text/plain"});
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: "ランプシャッター",
+        text: "保存権限の事前取得"
+      }).catch(()=>{});
+    }
+  } catch(e){}
+}
+</script>
+
 </body>
 </html>
