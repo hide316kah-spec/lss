@@ -1,8 +1,7 @@
 // ==============================
-// ランプシャッター app.js（自動シャッター・閾値表示復活版）
+// ランプシャッター app.js（保存・自動・閾値統合版）
 // ==============================
 
-// --- 二重起動防止 ---
 if (window.__LS_RUNNING__) {
   console.warn("already running");
 } else {
@@ -15,10 +14,12 @@ if (window.__LS_RUNNING__) {
   const mode = window.LS_MODE || "day";
 
   const video = document.getElementById("preview");
-  const roi = document.getElementById("roi");
   const statusEl = document.getElementById("status");
   const flash = document.getElementById("flash");
+  const camBtn = document.getElementById("cam");
+  const okSound = new Audio("ok_voice.mp3");
 
+  // ---- カメラ起動 ----
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
@@ -30,11 +31,12 @@ if (window.__LS_RUNNING__) {
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
+  // ---- メイン検出処理 ----
   function startDetect() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     let lastResult = "";
-    const lastShot = { time: 0 };
+    let lastShotTime = 0;
 
     function loop() {
       const vw = video.videoWidth;
@@ -55,9 +57,7 @@ if (window.__LS_RUNNING__) {
 
       const imgData = ctx.getImageData(rx, ry, rw, rh);
       const pixels = imgData.data;
-      let rCount = 0,
-        gCount = 0,
-        total = 0;
+      let rCount = 0, gCount = 0, total = 0;
 
       for (let i = 0; i < pixels.length; i += 4) {
         const r = pixels[i];
@@ -73,7 +73,7 @@ if (window.__LS_RUNNING__) {
       const gRatio = gCount / total;
       const rRatio = rCount / total;
 
-      // --- 閾値表示（画面下） ---
+      // --- 閾値表示（左下） ---
       let stat = document.getElementById("live-stats");
       if (!stat) {
         stat = document.createElement("div");
@@ -83,7 +83,7 @@ if (window.__LS_RUNNING__) {
         stat.style.bottom = "18px";
         stat.style.color = "#fff";
         stat.style.font = "600 14px system-ui";
-        stat.style.zIndex = "60";
+        stat.style.zIndex = "99";
         document.body.appendChild(stat);
       }
       stat.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(
@@ -99,11 +99,11 @@ if (window.__LS_RUNNING__) {
       statusEl.textContent = result;
       statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
 
-      // --- 自動シャッター ---
+      // --- 自動シャッター（OK時） ---
       const now = performance.now();
-      if (result === "OK" && lastResult !== "OK" && now - lastShot.time > 2500) {
-        lastShot.time = now;
-        triggerShot(result);
+      if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
+        lastShotTime = now;
+        triggerShot(true);
       }
       lastResult = result;
 
@@ -112,12 +112,18 @@ if (window.__LS_RUNNING__) {
     loop();
   }
 
-  // --- シャッター撮影処理 ---
-  function triggerShot(result) {
+  // ---- 手動撮影ボタン（イラストタップ）----
+  camBtn.addEventListener("click", () => triggerShot(false));
+
+  // ---- 撮影処理（共通）----
+  function triggerShot(auto) {
+    // 演出
     flash.style.opacity = 0.85;
     setTimeout(() => (flash.style.opacity = 0), 120);
     navigator.vibrate?.(100);
+    if (auto) okSound.play();
 
+    // 撮影保存
     const canvas = document.createElement("canvas");
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -126,7 +132,7 @@ if (window.__LS_RUNNING__) {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, vw, vh);
 
-    const ok = result === "OK";
+    const ok = statusEl.textContent === "OK";
     ctx.fillStyle = ok ? "#17c964" : "#e5484d";
     ctx.globalAlpha = 0.85;
     ctx.fillRect(18, 18, ok ? 120 : 140, 60);
@@ -135,8 +141,7 @@ if (window.__LS_RUNNING__) {
     ctx.font = "700 36px system-ui";
     ctx.fillText(ok ? "OK" : "NG?", 30, 60);
 
-    const d = new Date(),
-      z = (n) => String(n).padStart(2, "0");
+    const d = new Date(), z = (n) => String(n).padStart(2, "0");
     const t = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(
       d.getDate()
     )} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
