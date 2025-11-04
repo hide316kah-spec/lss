@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（HTML構成完全対応・安定版）
+// ランプシャッター app.js（完全安定統合版）
 // ==============================
 
 // --- 二重起動防止 ---
@@ -9,17 +9,22 @@ if (window.__LS_RUNNING__) {
   window.__LS_RUNNING__ = true;
 
   // --- 閾値設定 ---
-  const GREEN_RATIO_MIN = { day: 0.01, night: 0.04 }; // 緑LEDの閾値（昼1%, 夜4%）
-  const RED_THRESHOLD = 0.02; // 赤LEDの閾値
-  const ROI = { x: 0.55, y: 0.05, w: 0.45, h: 0.25 }; // ROI右上横長固定
+  // 昼は1.5%、夜は4%、赤は2%
+  const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 };
+  const RED_THRESHOLD = 0.02;
 
-  // --- モード取得 ---
+  // --- ROI（右上・横長固定：CSS #roi と一致）---
+  const ROI = { x: 0.53, y: 0.06, w: 0.45, h: 0.25 };
+
+  // --- モード取得（昼 or 夜）---
   const mode = window.LS_MODE || "day";
 
   // --- HTML要素取得 ---
   const video = document.getElementById("preview");
+  const roi = document.getElementById("roi");
   const statusEl = document.getElementById("status");
   const flash = document.getElementById("flash");
+  const camBtn = document.getElementById("cam"); // ← カメライラストボタン取得
   const okSound = new Audio("ok_voice.mp3");
 
   // --- カメラ起動 ---
@@ -34,12 +39,26 @@ if (window.__LS_RUNNING__) {
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
-  // --- 判定処理 ---
+  // --- カメライラストの余白・枠削除（UI調整）---
+  if (camBtn) {
+    camBtn.style.background = "transparent";
+    camBtn.style.border = "none";
+    camBtn.style.boxShadow = "none";
+    camBtn.style.padding = "0";
+  }
+
+  // --- タップ撮影（イラストタップでも撮影できる）---
+  if (camBtn) {
+    camBtn.addEventListener("click", () => triggerShot(false));
+  }
+
+  // --- メイン検出処理 ---
   function startDetect() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
     let lastResult = "";
-    let lastShotTime = 0;
+    const lastShot = { time: 0 };
 
     function loop() {
       const vw = video.videoWidth;
@@ -53,22 +72,28 @@ if (window.__LS_RUNNING__) {
       canvas.height = vh;
       ctx.drawImage(video, 0, 0, vw, vh);
 
+      // ROI計算
       const rx = vw * ROI.x;
       const ry = vh * ROI.y;
       const rw = vw * ROI.w;
       const rh = vh * ROI.h;
-      const img = ctx.getImageData(rx, ry, rw, rh).data;
 
+      const imgData = ctx.getImageData(rx, ry, rw, rh);
+      const pixels = imgData.data;
       let rCount = 0,
         gCount = 0,
         total = 0;
 
-      for (let i = 0; i < img.length; i += 4) {
-        const r = img[i];
-        const g = img[i + 1];
-        const b = img[i + 2];
+      for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
         const brightness = (r + g + b) / 3;
+
+        // 暗すぎ・明るすぎは除外（反射対策）
         if (brightness < 50 || brightness > 240) continue;
+
+        // 緑・赤判定
         if (g > r * 1.4 && g > b * 1.2 && g > 90) gCount++;
         if (r > g * 1.4 && r > b * 1.2 && r > 90) rCount++;
         total++;
@@ -83,11 +108,11 @@ if (window.__LS_RUNNING__) {
         result = "OK";
       }
 
-      // --- 結果表示 ---
+      // --- 結果反映 ---
       statusEl.textContent = result;
       statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
 
-      // --- R/G表示（下部HUD）---
+      // --- R/G% 表示（HUD）---
       let stat = document.getElementById("live-stats");
       if (!stat) {
         stat = document.createElement("div");
@@ -103,10 +128,14 @@ if (window.__LS_RUNNING__) {
         gRatio * 100
       ).toFixed(1)}%`;
 
-      // --- 自動シャッター（OK検知）---
+      // --- 自動シャッター（OK時）---
       const now = performance.now();
-      if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2000) {
-        lastShotTime = now;
+      if (
+        result === "OK" &&
+        lastResult !== "OK" &&
+        now - lastShot.time > 2000
+      ) {
+        lastShot.time = now;
         triggerShot(true);
       }
 
@@ -117,49 +146,73 @@ if (window.__LS_RUNNING__) {
     loop();
   }
 
-  // --- 撮影処理 ---
+  // --- 撮影処理（自動・手動共通）---
   function triggerShot(auto) {
     // フラッシュ
     flash.style.opacity = 0.85;
     setTimeout(() => (flash.style.opacity = 0), 120);
 
-    // 音声・振動
-    okSound.play().catch(() => {});
-    navigator.vibrate?.(200);
+    // バイブ
+    navigator.vibrate?.(80);
 
-    // スナップショット保存
-    const c = document.createElement("canvas");
+    // 音声
+    const u = new SpeechSynthesisUtterance("オーケー");
+    u.lang = "ja-JP";
+    speechSynthesis.speak(u);
+
+    // 撮影保存
+    const canvas = document.createElement("canvas");
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    c.width = vw;
-    c.height = vh;
-    const cx = c.getContext("2d");
-    cx.drawImage(video, 0, 0, vw, vh);
+    canvas.width = vw;
+    canvas.height = vh;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, vw, vh);
 
-    // 焼き込み
+    // 日付と結果を焼き込み
     const ok = statusEl.textContent === "OK";
-    cx.fillStyle = ok ? "#17c964" : "#e5484d";
-    cx.globalAlpha = 0.85;
-    cx.fillRect(18, 18, ok ? 120 : 140, 60);
-    cx.globalAlpha = 1;
-    cx.fillStyle = ok ? "#003300" : "#fff";
-    cx.font = "700 36px system-ui";
-    cx.fillText(ok ? "OK" : "NG?", 30, 60);
+    ctx.fillStyle = ok ? "#17c964" : "#e5484d";
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(18, 18, ok ? 120 : 140, 60);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = ok ? "#003300" : "#fff";
+    ctx.font = "700 36px system-ui";
+    ctx.fillText(ok ? "OK" : "NG?", 30, 60);
+
     const d = new Date(),
       z = (n) => String(n).padStart(2, "0");
-    const t = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(
-      d.getHours()
-    )}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
-    cx.font = "600 24px system-ui";
-    cx.fillStyle = "#fff";
-    cx.fillText(t, 18, vh - 24);
+    const t = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(
+      d.getDate()
+    )} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+    ctx.font = "600 24px system-ui";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(t, 18, vh - 24);
 
-    const a = document.createElement("a");
-    const ts = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(
-      d.getHours()
-    )}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
-    a.download = ts;
-    a.href = c.toDataURL("image/jpeg", 0.9);
-    a.click();
+    // === 保存処理（写真アプリ保存対応）===
+    const blob = dataURLtoBlob(canvas.toDataURL("image/jpeg", 0.92));
+    const file = new File([blob], `${t}_${ok ? "OK" : "NG?"}.jpg`, {
+      type: "image/jpeg",
+    });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "ランプシャッター" }).catch(() => {});
+    } else {
+      const a = document.createElement("a");
+      a.download = `${t}_${ok ? "OK" : "NG?"}.jpg`;
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+  }
+
+  // --- DataURL → Blob 変換関数 ---
+  function dataURLtoBlob(dataurl) {
+    const arr = dataurl.split(",");
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new Blob([u8arr], { type: mime });
   }
 }
