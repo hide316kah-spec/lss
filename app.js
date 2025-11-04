@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（保存共有＋誤判定対策版）
+// ランプシャッター app.js（共有シート統一保存版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -7,8 +7,8 @@ if (window.__LS_RUNNING__) {
 } else {
   window.__LS_RUNNING__ = true;
 
-  const GREEN_RATIO_MIN = { day: 0.015, night: 0.05 }; // 夜は少し厳しめ
-  const RED_THRESHOLD = 0.01; // 赤閾値を厳しく
+  const GREEN_RATIO_MIN = { day: 0.015, night: 0.05 };
+  const RED_THRESHOLD = 0.01;
   const ROI = { x: 0.55, y: 0.05, w: 0.45, h: 0.25 };
   const mode = window.LS_MODE || "day";
 
@@ -25,7 +25,6 @@ if (window.__LS_RUNNING__) {
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play().catch(() => {
-          // iPhoneの自動再生ブロック対策
           video.addEventListener("click", () => video.play(), { once: true });
         });
         startDetect();
@@ -87,7 +86,6 @@ if (window.__LS_RUNNING__) {
       stat.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(gRatio * 100).toFixed(1)}%`;
 
       let result = "NG?";
-      // --- 誤判定対策付き ---
       if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD)
         result = "OK";
 
@@ -151,13 +149,15 @@ if (window.__LS_RUNNING__) {
       a.click();
       a.remove();
 
-      // --- iPhone共有シートで写真アプリ保存を促す ---
+      // --- 共有シートを開いて写真アプリ保存を促す ---
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({
-          files: [file],
-          title: ts,
-          text: "撮影結果を保存"
-        }).catch(()=>{});
+        setTimeout(() => {
+          navigator.share({
+            files: [file],
+            title: ts,
+            text: "画像を保存を選択してください"
+          }).catch(()=>{});
+        }, 500);
       }
 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
