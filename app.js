@@ -1,9 +1,10 @@
 // ==============================
-// ランプシャッター app.js（完全安定・DOM同期版）
+// ランプシャッター app.js（黒画面対策付き安定版）
 // ==============================
 
-window.addEventListener("DOMContentLoaded", () => {
-  if (window.__LS_RUNNING__) return;
+if (window.__LS_RUNNING__) {
+  console.warn("already running");
+} else {
   window.__LS_RUNNING__ = true;
 
   const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 };
@@ -17,18 +18,16 @@ window.addEventListener("DOMContentLoaded", () => {
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
 
-  if (!video || !camBtn) {
-    alert("HTML構成エラー：video または cam ボタンが見つかりません。");
-    return;
-  }
-
   // --- カメラ起動 ---
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
       video.srcObject = stream;
       video.onloadedmetadata = () => {
-        video.play();
+        video.play().catch(() => {
+          // iPhoneの自動再生ブロック対策
+          video.addEventListener("click", () => video.play(), { once: true });
+        });
         startDetect();
       };
     })
@@ -44,7 +43,7 @@ window.addEventListener("DOMContentLoaded", () => {
     function loop() {
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      if (!vw || !vh) {
+      if (vw === 0 || vh === 0) {
         requestAnimationFrame(loop);
         return;
       }
@@ -62,9 +61,7 @@ window.addEventListener("DOMContentLoaded", () => {
       let rCount = 0, gCount = 0, total = 0;
 
       for (let i = 0; i < pixels.length; i += 4) {
-        const r = pixels[i];
-        const g = pixels[i + 1];
-        const b = pixels[i + 2];
+        const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
         const brightness = (r + g + b) / 3;
         if (brightness < 50 || brightness > 240) continue;
         if (g > r * 1.4 && g > b * 1.2 && g > 90) gCount++;
@@ -87,32 +84,21 @@ window.addEventListener("DOMContentLoaded", () => {
         stat.style.zIndex = "99";
         document.body.appendChild(stat);
       }
-      stat.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(
-        gRatio * 100
-      ).toFixed(1)}%`;
+      stat.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(gRatio * 100).toFixed(1)}%`;
 
-      // --- 判定（誤検知防止）---
       let result = "NG?";
-      if (
-        gRatio > GREEN_RATIO_MIN[mode] &&
-        rRatio < RED_THRESHOLD &&
-        gCount > 500
-      ) {
+      if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD)
         result = "OK";
-      }
 
-      // --- 表示更新 ---
       statusEl.textContent = result;
       statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
 
-      // --- 自動シャッター ---
       const now = performance.now();
       if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
         lastShotTime = now;
         triggerShot(true);
       }
       lastResult = result;
-
       requestAnimationFrame(loop);
     }
     loop();
@@ -127,11 +113,11 @@ window.addEventListener("DOMContentLoaded", () => {
     flash.style.opacity = 0.9;
     setTimeout(() => (flash.style.opacity = 0), 150);
     navigator.vibrate?.(200);
+
     if (auto) okSound.play();
 
     const canvas = document.createElement("canvas");
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
+    const vw = video.videoWidth, vh = video.videoHeight;
     canvas.width = vw;
     canvas.height = vh;
     const ctx = canvas.getContext("2d");
@@ -146,27 +132,24 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.font = "700 36px system-ui";
     ctx.fillText(ok ? "OK" : "NG?", 30, 60);
 
-    const d = new Date();
-    const z = (n) => String(n).padStart(2, "0");
-    const ts = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(
-      d.getHours()
-    )}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
+    const d = new Date(), z = (n) => String(n).padStart(2, "0");
+    const t = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+    ctx.font = "600 24px system-ui";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(t, 18, vh - 24);
+
+    const ts = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
 
     canvas.toBlob((blob) => {
       const file = new File([blob], ts, { type: "image/jpeg" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({
-          files: [file],
-          title: "撮影結果",
-          text: "ランプシャッター撮影結果",
-        });
-      } else {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = ts;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-      }
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = ts;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, "image/jpeg", 0.92);
   }
-});
+}
