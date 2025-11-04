@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（保存・自動・閾値統合版）
+// ランプシャッター app.js（保存・演出完全修正版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -10,7 +10,6 @@ if (window.__LS_RUNNING__) {
   const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 }; // 昼1.5%, 夜4%
   const RED_THRESHOLD = 0.02;
   const ROI = { x: 0.55, y: 0.05, w: 0.45, h: 0.25 };
-
   const mode = window.LS_MODE || "day";
 
   const video = document.getElementById("preview");
@@ -19,7 +18,7 @@ if (window.__LS_RUNNING__) {
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
 
-  // ---- カメラ起動 ----
+  // --- カメラ起動 ---
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
@@ -31,7 +30,7 @@ if (window.__LS_RUNNING__) {
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
-  // ---- メイン検出処理 ----
+  // --- 判定ループ ---
   function startDetect() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -54,15 +53,12 @@ if (window.__LS_RUNNING__) {
       const ry = vh * ROI.y;
       const rw = vw * ROI.w;
       const rh = vh * ROI.h;
-
       const imgData = ctx.getImageData(rx, ry, rw, rh);
       const pixels = imgData.data;
       let rCount = 0, gCount = 0, total = 0;
 
       for (let i = 0; i < pixels.length; i += 4) {
-        const r = pixels[i];
-        const g = pixels[i + 1];
-        const b = pixels[i + 2];
+        const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
         const brightness = (r + g + b) / 3;
         if (brightness < 50 || brightness > 240) continue;
         if (g > r * 1.4 && g > b * 1.2 && g > 90) gCount++;
@@ -73,7 +69,7 @@ if (window.__LS_RUNNING__) {
       const gRatio = gCount / total;
       const rRatio = rCount / total;
 
-      // --- 閾値表示（左下） ---
+      // 閾値表示
       let stat = document.getElementById("live-stats");
       if (!stat) {
         stat = document.createElement("div");
@@ -90,43 +86,41 @@ if (window.__LS_RUNNING__) {
         gRatio * 100
       ).toFixed(1)}%`;
 
-      // --- 判定 ---
       let result = "NG?";
-      if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD) {
+      if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD)
         result = "OK";
-      }
 
       statusEl.textContent = result;
       statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
 
-      // --- 自動シャッター（OK時） ---
       const now = performance.now();
       if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
         lastShotTime = now;
         triggerShot(true);
       }
       lastResult = result;
-
       requestAnimationFrame(loop);
     }
     loop();
   }
 
-  // ---- 手動撮影ボタン（イラストタップ）----
+  // --- イラストタップで撮影 ---
   camBtn.addEventListener("click", () => triggerShot(false));
 
-  // ---- 撮影処理（共通）----
+  // --- 撮影処理 ---
   function triggerShot(auto) {
-    // 演出
-    flash.style.opacity = 0.85;
-    setTimeout(() => (flash.style.opacity = 0), 120);
-    navigator.vibrate?.(100);
+    // --- フラッシュ & バイブ ---
+    flash.style.transition = "opacity 0.15s";
+    flash.style.opacity = 0.9;
+    setTimeout(() => (flash.style.opacity = 0), 150);
+    navigator.vibrate?.(200);
+
+    // --- 音声 ---
     if (auto) okSound.play();
 
-    // 撮影保存
+    // --- 撮影保存処理 ---
     const canvas = document.createElement("canvas");
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
+    const vw = video.videoWidth, vh = video.videoHeight;
     canvas.width = vw;
     canvas.height = vh;
     const ctx = canvas.getContext("2d");
@@ -149,12 +143,21 @@ if (window.__LS_RUNNING__) {
     ctx.fillStyle = "#fff";
     ctx.fillText(t, 18, vh - 24);
 
-    const a = document.createElement("a");
     const ts = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(
       d.getHours()
     )}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
-    a.download = ts;
-    a.href = canvas.toDataURL("image/jpeg", 0.92);
-    a.click();
+
+    // --- iPhone Safari向け保存 ---
+    canvas.toBlob((blob) => {
+      const file = new File([blob], ts, { type: "image/jpeg" });
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = ts;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, "image/jpeg", 0.92);
   }
 }
