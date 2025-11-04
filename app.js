@@ -1,61 +1,34 @@
 // ==============================
-// ランプシャッター app.js（黒画面修正＋UI完全修正版）
+// ランプシャッター app.js（自動シャッター・閾値表示復活版）
 // ==============================
 
+// --- 二重起動防止 ---
 if (window.__LS_RUNNING__) {
   console.warn("already running");
 } else {
   window.__LS_RUNNING__ = true;
 
-  const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 };
+  const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 }; // 昼1.5%, 夜4%
   const RED_THRESHOLD = 0.02;
-  const ROI = { x: 0.53, y: 0.06, w: 0.45, h: 0.25 };
+  const ROI = { x: 0.55, y: 0.05, w: 0.45, h: 0.25 };
+
   const mode = window.LS_MODE || "day";
 
   const video = document.getElementById("preview");
   const roi = document.getElementById("roi");
   const statusEl = document.getElementById("status");
   const flash = document.getElementById("flash");
-  const camBtn = document.getElementById("cam");
-  const okSound = new Audio("ok_voice.mp3");
 
-  // --- カメラ映像設定（黒画面対策）---
-  video.autoplay = true;
-  video.playsInline = true;
-  video.muted = true;
-
-  // --- カメラ起動 ---
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
       video.srcObject = stream;
       video.onloadedmetadata = () => {
-        video.play().catch(() => {});
+        video.play();
         startDetect();
       };
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
-
-  // --- カメライラストの背景と枠を完全削除 ---
-  if (camBtn) {
-    camBtn.style.background = "transparent";
-    camBtn.style.border = "none";
-    camBtn.style.boxShadow = "none";
-    camBtn.style.padding = "0";
-    camBtn.style.outline = "none";
-
-    const camImg = camBtn.querySelector("img");
-    if (camImg) {
-      camImg.style.background = "transparent";
-      camImg.style.border = "none";
-      camImg.style.boxShadow = "none";
-      camImg.style.margin = "0";
-      camImg.style.padding = "0";
-      camImg.style.display = "block";
-    }
-
-    camBtn.addEventListener("click", () => triggerShot(false));
-  }
 
   function startDetect() {
     const canvas = document.createElement("canvas");
@@ -84,38 +57,23 @@ if (window.__LS_RUNNING__) {
       const pixels = imgData.data;
       let rCount = 0,
         gCount = 0,
-        total = 0,
-        brightTotal = 0;
+        total = 0;
 
       for (let i = 0; i < pixels.length; i += 4) {
         const r = pixels[i];
         const g = pixels[i + 1];
         const b = pixels[i + 2];
         const brightness = (r + g + b) / 3;
-        if (brightness < 60 || brightness > 230) continue;
-
-        if (g > r * 1.5 && g > b * 1.3 && g > 100) gCount++;
+        if (brightness < 50 || brightness > 240) continue;
+        if (g > r * 1.4 && g > b * 1.2 && g > 90) gCount++;
         if (r > g * 1.4 && r > b * 1.2 && r > 90) rCount++;
-        brightTotal += brightness;
         total++;
       }
 
       const gRatio = gCount / total;
       const rRatio = rCount / total;
-      const avgBrightness = brightTotal / (total || 1);
 
-      let result = "NG?";
-      if (
-        gRatio > GREEN_RATIO_MIN[mode] &&
-        rRatio < RED_THRESHOLD &&
-        avgBrightness < 200
-      ) {
-        result = "OK";
-      }
-
-      statusEl.textContent = result;
-      statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
-
+      // --- 閾値表示（画面下） ---
       let stat = document.getElementById("live-stats");
       if (!stat) {
         stat = document.createElement("div");
@@ -125,43 +83,40 @@ if (window.__LS_RUNNING__) {
         stat.style.bottom = "18px";
         stat.style.color = "#fff";
         stat.style.font = "600 14px system-ui";
+        stat.style.zIndex = "60";
         document.body.appendChild(stat);
       }
-      stat.innerHTML = `R:${(rRatio * 100).toFixed(1)}%　G:${(
+      stat.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(
         gRatio * 100
       ).toFixed(1)}%`;
 
-      const now = performance.now();
-      if (
-        result === "OK" &&
-        lastResult !== "OK" &&
-        now - lastShot.time > 2000
-      ) {
-        lastShot.time = now;
-        setTimeout(() => triggerShot(true), 100);
+      // --- 判定 ---
+      let result = "NG?";
+      if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD) {
+        result = "OK";
       }
 
+      statusEl.textContent = result;
+      statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
+
+      // --- 自動シャッター ---
+      const now = performance.now();
+      if (result === "OK" && lastResult !== "OK" && now - lastShot.time > 2500) {
+        lastShot.time = now;
+        triggerShot(result);
+      }
       lastResult = result;
+
       requestAnimationFrame(loop);
     }
-
     loop();
   }
 
-  function triggerShot(auto) {
-    try {
-      const u = new SpeechSynthesisUtterance("オーケー");
-      u.lang = "ja-JP";
-      speechSynthesis.speak(u);
-    } catch {
-      try {
-        okSound.play().catch(() => {});
-      } catch {}
-    }
-
+  // --- シャッター撮影処理 ---
+  function triggerShot(result) {
     flash.style.opacity = 0.85;
     setTimeout(() => (flash.style.opacity = 0), 120);
-    navigator.vibrate?.(80);
+    navigator.vibrate?.(100);
 
     const canvas = document.createElement("canvas");
     const vw = video.videoWidth;
@@ -171,7 +126,7 @@ if (window.__LS_RUNNING__) {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, vw, vh);
 
-    const ok = statusEl.textContent === "OK";
+    const ok = result === "OK";
     ctx.fillStyle = ok ? "#17c964" : "#e5484d";
     ctx.globalAlpha = 0.85;
     ctx.fillRect(18, 18, ok ? 120 : 140, 60);
@@ -189,29 +144,12 @@ if (window.__LS_RUNNING__) {
     ctx.fillStyle = "#fff";
     ctx.fillText(t, 18, vh - 24);
 
-    const blob = dataURLtoBlob(canvas.toDataURL("image/jpeg", 0.92));
-    const file = new File([blob], `${t}_${ok ? "OK" : "NG?"}.jpg`, {
-      type: "image/jpeg",
-    });
-
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: "ランプシャッター" }).catch(() => {});
-    } else {
-      const a = document.createElement("a");
-      a.download = `${t}_${ok ? "OK" : "NG?"}.jpg`;
-      a.href = URL.createObjectURL(blob);
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
-  }
-
-  function dataURLtoBlob(dataurl) {
-    const arr = dataurl.split(",");
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new Blob([u8arr], { type: mime });
+    const a = document.createElement("a");
+    const ts = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(
+      d.getHours()
+    )}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
+    a.download = ts;
+    a.href = canvas.toDataURL("image/jpeg", 0.92);
+    a.click();
   }
 }
