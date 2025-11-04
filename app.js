@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（共有シート統一保存版）
+// ランプシャッター app.js（モード選択タップで保存許可確保版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -142,22 +142,23 @@ if (window.__LS_RUNNING__) {
     canvas.toBlob((blob) => {
       const file = new File([blob], ts, { type: "image/jpeg" });
       const url = URL.createObjectURL(file);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = ts;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
 
-      // --- 共有シートを開いて写真アプリ保存を促す ---
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        setTimeout(() => {
-          navigator.share({
-            files: [file],
-            title: ts,
-            text: "画像を保存を選択してください"
-          }).catch(()=>{});
-        }, 500);
+      // --- 保存権限を確保済みなら共有シートで写真保存可能 ---
+      const userTapped = localStorage.getItem('LS_USER_TAPPED') === '1';
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && userTapped) {
+        navigator.share({
+          files: [file],
+          title: ts,
+          text: "画像を保存を選択してください"
+        }).catch(()=>{});
+      } else {
+        // 保険：古いSafariなど
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = ts;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       }
 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
