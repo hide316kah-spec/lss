@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（黒画面対策付き安定版）
+// ランプシャッター app.js（保存共有＋誤判定対策版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -7,8 +7,8 @@ if (window.__LS_RUNNING__) {
 } else {
   window.__LS_RUNNING__ = true;
 
-  const GREEN_RATIO_MIN = { day: 0.015, night: 0.04 };
-  const RED_THRESHOLD = 0.02;
+  const GREEN_RATIO_MIN = { day: 0.015, night: 0.05 }; // 夜は少し厳しめ
+  const RED_THRESHOLD = 0.01; // 赤閾値を厳しく
   const ROI = { x: 0.55, y: 0.05, w: 0.45, h: 0.25 };
   const mode = window.LS_MODE || "day";
 
@@ -87,6 +87,7 @@ if (window.__LS_RUNNING__) {
       stat.textContent = `R:${(rRatio * 100).toFixed(1)}%  G:${(gRatio * 100).toFixed(1)}%`;
 
       let result = "NG?";
+      // --- 誤判定対策付き ---
       if (gRatio > GREEN_RATIO_MIN[mode] && rRatio < RED_THRESHOLD)
         result = "OK";
 
@@ -149,6 +150,16 @@ if (window.__LS_RUNNING__) {
       document.body.appendChild(a);
       a.click();
       a.remove();
+
+      // --- iPhone共有シートで写真アプリ保存を促す ---
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: ts,
+          text: "撮影結果を保存"
+        }).catch(()=>{});
+      }
+
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, "image/jpeg", 0.92);
   }
