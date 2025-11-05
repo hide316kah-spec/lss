@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（自動撮影＋タップ保存型）
+// ランプシャッター app.js（バイブのみ）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -14,13 +14,13 @@ if (window.__LS_RUNNING__) {
 
   const video = document.getElementById("preview");
   const statusEl = document.getElementById("status");
-  const flash = document.getElementById("flash");
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
 
   let startTime = performance.now();
   let pendingFile = null;
 
+  // --- カメラ起動 ---
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
@@ -34,6 +34,7 @@ if (window.__LS_RUNNING__) {
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
+  // --- 判定ループ ---
   function startDetect() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -111,19 +112,21 @@ if (window.__LS_RUNNING__) {
     loop();
   }
 
+  // --- カメラボタンで撮影 ---
   camBtn.addEventListener("click", () => triggerShot(false));
 
+  // --- 撮影処理（バイブのみ演出） ---
   function triggerShot(auto) {
-    // --- フラッシュ & バイブ ---
-    flash.style.transition = "opacity 0.15s";
-    flash.style.opacity = 0.9;
-    setTimeout(() => (flash.style.opacity = 0), 150);
-    navigator.vibrate?.(200);
+    try {
+      // バイブ（強制的に発火）
+      navigator.vibrate?.([250, 120, 250]);
+    } catch (e) {}
 
-    if (auto) okSound.play().catch(()=>{});
+    if (auto) okSound.play().catch(() => {});
 
     const canvas = document.createElement("canvas");
     const vw = video.videoWidth, vh = video.videoHeight;
+    if (vw === 0 || vh === 0) return;
     canvas.width = vw;
     canvas.height = vh;
     const ctx = canvas.getContext("2d");
@@ -150,26 +153,27 @@ if (window.__LS_RUNNING__) {
       pendingFile = new File([blob], ts, { type: "image/jpeg" });
 
       if (auto) {
-        // 保存誘導を表示
         const msg = document.createElement("div");
         msg.textContent = "📸 画面をタップして保存";
-        msg.style.position = "fixed";
-        msg.style.top = "50%";
-        msg.style.left = "50%";
-        msg.style.transform = "translate(-50%, -50%)";
-        msg.style.background = "rgba(0,0,0,0.7)";
-        msg.style.color = "#fff";
-        msg.style.padding = "14px 22px";
-        msg.style.borderRadius = "10px";
-        msg.style.font = "600 18px system-ui";
-        msg.style.zIndex = "999";
+        Object.assign(msg.style, {
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          background: "rgba(0,0,0,0.7)",
+          color: "#fff",
+          padding: "14px 22px",
+          borderRadius: "10px",
+          font: "600 18px system-ui",
+          zIndex: "999",
+        });
         document.body.appendChild(msg);
-        setTimeout(()=>msg.remove(), 2000);
+        setTimeout(() => msg.remove(), 2000);
       }
     }, "image/jpeg", 0.92);
   }
 
-  // --- 次タップで保存を実行 ---
+  // --- 次タップで保存実行 ---
   document.body.addEventListener("click", () => {
     if (!pendingFile) return;
     const file = pendingFile;
@@ -179,7 +183,7 @@ if (window.__LS_RUNNING__) {
         files: [file],
         title: file.name,
         text: "画像を保存を選択してください"
-      }).catch(()=>{});
+      }).catch(() => {});
     }
   });
 }
