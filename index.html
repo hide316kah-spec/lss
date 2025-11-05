@@ -54,19 +54,22 @@ h1{font-size:34px;margin:10px 0 6px}
 
 <script>
 // ==============================
-// 保存権限確保（無音再生によるSafari対応版）
+// Safariでの誤保存・誤共有防止版
 // ==============================
 function LS_preGrant(){
   try {
+    // 1. ユーザー操作があったことだけ記録
     localStorage.setItem('LS_USER_TAPPED','1');
-    // --- Safariがユーザー操作を検知するための無音再生 ---
-    const silent = new Audio();
-    silent.src = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA";
-    silent.play().then(() => {
-      silent.pause();
-      silent.currentTime = 0;
-    }).catch(()=>{});
-  } catch(e){}
+    // 2. Safariの自動再生解除をトリガーするだけの軽い操作
+    const btn = document.createElement("button");
+    btn.style.display = "none";
+    document.body.appendChild(btn);
+    btn.focus();
+    document.body.removeChild(btn);
+    // 3. 何も再生・共有・保存しない
+  } catch(e){
+    console.warn("LS_preGrant error:", e);
+  }
 }
 </script>
 

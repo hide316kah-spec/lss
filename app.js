@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（起動ディレイ＋Safari自動保存安定版）
+// ランプシャッター app.js（写真アプリ保存＋演出復活）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -18,7 +18,7 @@ if (window.__LS_RUNNING__) {
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
 
-  let startTime = performance.now(); // 起動時刻記録
+  let startTime = performance.now();
 
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
@@ -48,7 +48,7 @@ if (window.__LS_RUNNING__) {
       }
 
       const elapsed = performance.now() - startTime;
-      if (elapsed < 2000) { // 起動2秒間はスキップ
+      if (elapsed < 2000) {
         requestAnimationFrame(loop);
         return;
       }
@@ -101,10 +101,7 @@ if (window.__LS_RUNNING__) {
       const now = performance.now();
       if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
         lastShotTime = now;
-        setTimeout(() => {
-          try { triggerShot(true); }
-          catch(e){ console.warn("Auto shot skipped:", e); }
-        }, 100);
+        setTimeout(() => triggerShot(true), 100);
       }
 
       lastResult = result;
@@ -116,13 +113,14 @@ if (window.__LS_RUNNING__) {
   camBtn.addEventListener("click", () => triggerShot(false));
 
   function triggerShot(auto) {
+    // --- フラッシュ & バイブ ---
     flash.style.transition = "opacity 0.15s";
     flash.style.opacity = 0.9;
     setTimeout(() => (flash.style.opacity = 0), 150);
     navigator.vibrate?.(200);
 
     if (auto) {
-      setTimeout(() => { okSound.play().catch(()=>{}); }, 200);
+      setTimeout(() => okSound.play().catch(()=>{}), 200);
     }
 
     const canvas = document.createElement("canvas");
@@ -142,44 +140,47 @@ if (window.__LS_RUNNING__) {
     ctx.fillText(ok ? "OK" : "NG?", 30, 60);
 
     const d = new Date(), z = (n) => String(n).padStart(2, "0");
-    const t = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+    const t = `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
     ctx.font = "600 24px system-ui";
     ctx.fillStyle = "#fff";
     ctx.fillText(t, 18, vh - 24);
 
-    const ts = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
+    const ts = `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
 
     canvas.toBlob((blob) => {
       const file = new File([blob], ts, { type: "image/jpeg" });
-      const url = URL.createObjectURL(file);
       const userTapped = localStorage.getItem('LS_USER_TAPPED') === '1';
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      const shareGranted = sessionStorage.getItem('LS_SHARE_GRANTED') === '1';
 
-      if (auto && isSafari) {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = ts;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } 
-      else if (navigator.canShare && navigator.canShare({ files: [file] }) && userTapped) {
+      // --- 初回のみ共有シートを開いて許可を確保 ---
+      if (!shareGranted && navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({
           files: [file],
           title: ts,
           text: "画像を保存を選択してください"
+        }).then(()=>{
+          sessionStorage.setItem('LS_SHARE_GRANTED','1');
         }).catch(()=>{});
-      } 
-      else {
+        return;
+      }
+
+      // --- 2回目以降：完全自動保存 ---
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: ts,
+          text: ""
+        }).catch(()=>{});
+      } else {
+        const url = URL.createObjectURL(file);
         const a = document.createElement("a");
         a.href = url;
         a.download = ts;
         document.body.appendChild(a);
         a.click();
         a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url), 1000);
       }
-
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
     }, "image/jpeg", 0.92);
   }
 }
