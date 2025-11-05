@@ -1,18 +1,28 @@
+// --- 中の triggerShot 関数をこの形に差し替え ---
 function triggerShot(auto) {
-  // --- バイブのみ演出（Safari安定） ---
-  try {
-    navigator.vibrate?.([180, 100, 180]);
-  } catch (e) {}
+  // --- フラッシュ演出（確実発火） ---
+  flash.style.transition = "none";
+  flash.style.opacity = "1";
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      flash.style.transition = "opacity 0.25s";
+      flash.style.opacity = "0";
+    }, 60);
+  });
 
-  // --- 音声（OK時のみ） ---
+  // --- バイブ演出（パターン指定） ---
+  try {
+    navigator.vibrate?.([120, 50, 80]);
+  } catch(e){}
+
+  // --- 音声 ---
   if (auto) {
-    setTimeout(() => okSound.play().catch(() => {}), 150);
+    setTimeout(() => okSound.play().catch(()=>{}), 200);
   }
 
-  // --- 撮影保存処理 ---
+  // --- 撮影処理 ---
   const canvas = document.createElement("canvas");
   const vw = video.videoWidth, vh = video.videoHeight;
-  if (vw === 0 || vh === 0) return;
   canvas.width = vw;
   canvas.height = vh;
   const ctx = canvas.getContext("2d");
@@ -39,22 +49,21 @@ function triggerShot(auto) {
     pendingFile = new File([blob], ts, { type: "image/jpeg" });
 
     if (auto) {
+      // 保存誘導を表示
       const msg = document.createElement("div");
       msg.textContent = "📸 画面をタップして保存";
-      Object.assign(msg.style, {
-        position: "fixed",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        background: "rgba(0,0,0,0.7)",
-        color: "#fff",
-        padding: "14px 22px",
-        borderRadius: "10px",
-        font: "600 18px system-ui",
-        zIndex: "999",
-      });
+      msg.style.position = "fixed";
+      msg.style.top = "50%";
+      msg.style.left = "50%";
+      msg.style.transform = "translate(-50%, -50%)";
+      msg.style.background = "rgba(0,0,0,0.7)";
+      msg.style.color = "#fff";
+      msg.style.padding = "14px 22px";
+      msg.style.borderRadius = "10px";
+      msg.style.font = "600 18px system-ui";
+      msg.style.zIndex = "999";
       document.body.appendChild(msg);
-      setTimeout(() => msg.remove(), 2000);
+      setTimeout(()=>msg.remove(), 2000);
     }
   }, "image/jpeg", 0.92);
 }
