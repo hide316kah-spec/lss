@@ -1,26 +1,18 @@
 function triggerShot(auto) {
-  // --- フラッシュ演出（Safari安定版） ---
-  flash.style.opacity = "1";
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      flash.style.opacity = "0";
-    }, 80);
-  });
-
-  // --- バイブ演出 ---
+  // --- バイブのみ演出（Safari安定） ---
   try {
-    navigator.vibrate?.([150, 100, 150]);
-  } catch(e){}
+    navigator.vibrate?.([180, 100, 180]);
+  } catch (e) {}
 
-  // --- 音声 ---
+  // --- 音声（OK時のみ） ---
   if (auto) {
-    setTimeout(() => okSound.play().catch(()=>{}), 200);
+    setTimeout(() => okSound.play().catch(() => {}), 150);
   }
 
-  // --- 撮影処理（省略せず安定版） ---
+  // --- 撮影保存処理 ---
   const canvas = document.createElement("canvas");
   const vw = video.videoWidth, vh = video.videoHeight;
-  if (vw === 0 || vh === 0) return; // video未初期化防止
+  if (vw === 0 || vh === 0) return;
   canvas.width = vw;
   canvas.height = vh;
   const ctx = canvas.getContext("2d");
@@ -47,7 +39,6 @@ function triggerShot(auto) {
     pendingFile = new File([blob], ts, { type: "image/jpeg" });
 
     if (auto) {
-      // 保存誘導メッセージ
       const msg = document.createElement("div");
       msg.textContent = "📸 画面をタップして保存";
       Object.assign(msg.style, {
