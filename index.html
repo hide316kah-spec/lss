@@ -53,19 +53,19 @@ h1{font-size:34px;margin:10px 0 6px}
 </div>
 
 <script>
+// ==============================
+// 保存権限確保（無音再生によるSafari対応版）
+// ==============================
 function LS_preGrant(){
   try {
     localStorage.setItem('LS_USER_TAPPED','1');
-    // Safariに操作イベントを与えるためのダミー共有
-    const blob = new Blob(["ランプシャッター権限確認"], {type:"text/plain"});
-    const file = new File([blob], "grant.txt", {type:"text/plain"});
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({
-        files: [file],
-        title: "ランプシャッター",
-        text: "保存権限の事前取得"
-      }).catch(()=>{});
-    }
+    // --- Safariがユーザー操作を検知するための無音再生 ---
+    const silent = new Audio();
+    silent.src = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA";
+    silent.play().then(() => {
+      silent.pause();
+      silent.currentTime = 0;
+    }).catch(()=>{});
   } catch(e){}
 }
 </script>
