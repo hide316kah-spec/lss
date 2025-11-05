@@ -1,18 +1,19 @@
-// --- 中の triggerShot 関数をこの形に差し替え ---
 function triggerShot(auto) {
-  // --- フラッシュ演出（確実発火） ---
-  flash.style.transition = "none";
+  // --- フラッシュ（z-index最前面＋再描画で確実表示） ---
+  flash.style.zIndex = "9999";
   flash.style.opacity = "1";
+  flash.style.transition = "none";
   requestAnimationFrame(() => {
     setTimeout(() => {
       flash.style.transition = "opacity 0.25s";
       flash.style.opacity = "0";
-    }, 60);
+    }, 80);
   });
 
-  // --- バイブ演出（パターン指定） ---
+  // --- バイブ（iOS対応：2回連続 + 再フォーカス） ---
   try {
-    navigator.vibrate?.([120, 50, 80]);
+    navigator.vibrate?.([120, 80, 120]);
+    document.body.focus();
   } catch(e){}
 
   // --- 音声 ---
@@ -61,7 +62,7 @@ function triggerShot(auto) {
       msg.style.padding = "14px 22px";
       msg.style.borderRadius = "10px";
       msg.style.font = "600 18px system-ui";
-      msg.style.zIndex = "999";
+      msg.style.zIndex = "10000";
       document.body.appendChild(msg);
       setTimeout(()=>msg.remove(), 2000);
     }
