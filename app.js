@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（Safari完全自動保存対応版）
+// ランプシャッター app.js（起動ディレイ＋Safari自動保存安定版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -18,7 +18,8 @@ if (window.__LS_RUNNING__) {
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
 
-  // --- カメラ起動 ---
+  let startTime = performance.now(); // 起動時刻記録
+
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
@@ -32,7 +33,6 @@ if (window.__LS_RUNNING__) {
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
-  // --- 判定ループ ---
   function startDetect() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -43,6 +43,12 @@ if (window.__LS_RUNNING__) {
       const vw = video.videoWidth;
       const vh = video.videoHeight;
       if (vw === 0 || vh === 0) {
+        requestAnimationFrame(loop);
+        return;
+      }
+
+      const elapsed = performance.now() - startTime;
+      if (elapsed < 2000) { // 起動2秒間はスキップ
         requestAnimationFrame(loop);
         return;
       }
@@ -96,20 +102,19 @@ if (window.__LS_RUNNING__) {
       if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
         lastShotTime = now;
         setTimeout(() => {
-          try { triggerShot(true); } 
+          try { triggerShot(true); }
           catch(e){ console.warn("Auto shot skipped:", e); }
         }, 100);
       }
+
       lastResult = result;
       requestAnimationFrame(loop);
     }
     loop();
   }
 
-  // --- イラストタップで撮影 ---
   camBtn.addEventListener("click", () => triggerShot(false));
 
-  // --- 撮影処理 ---
   function triggerShot(auto) {
     flash.style.transition = "opacity 0.15s";
     flash.style.opacity = 0.9;
@@ -150,7 +155,6 @@ if (window.__LS_RUNNING__) {
       const userTapped = localStorage.getItem('LS_USER_TAPPED') === '1';
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-      // --- Safari自動保存: 共有シートを呼ばずダウンロードのみ ---
       if (auto && isSafari) {
         const a = document.createElement("a");
         a.href = url;
@@ -159,7 +163,6 @@ if (window.__LS_RUNNING__) {
         a.click();
         a.remove();
       } 
-      // --- 通常（手動タップなど）では共有シート ---
       else if (navigator.canShare && navigator.canShare({ files: [file] }) && userTapped) {
         navigator.share({
           files: [file],
@@ -167,7 +170,6 @@ if (window.__LS_RUNNING__) {
           text: "画像を保存を選択してください"
         }).catch(()=>{});
       } 
-      // --- どちらでもない環境（古いブラウザなど） ---
       else {
         const a = document.createElement("a");
         a.href = url;
