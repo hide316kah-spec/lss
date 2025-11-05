@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（写真アプリ保存＋演出復活）
+// ランプシャッター app.js（自動・セルフ統一保存版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -101,7 +101,7 @@ if (window.__LS_RUNNING__) {
       const now = performance.now();
       if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
         lastShotTime = now;
-        setTimeout(() => triggerShot(true), 100);
+        triggerShot(true);
       }
 
       lastResult = result;
@@ -119,9 +119,7 @@ if (window.__LS_RUNNING__) {
     setTimeout(() => (flash.style.opacity = 0), 150);
     navigator.vibrate?.(200);
 
-    if (auto) {
-      setTimeout(() => okSound.play().catch(()=>{}), 200);
-    }
+    if (auto) okSound.play().catch(()=>{});
 
     const canvas = document.createElement("canvas");
     const vw = video.videoWidth, vh = video.videoHeight;
@@ -149,29 +147,15 @@ if (window.__LS_RUNNING__) {
 
     canvas.toBlob((blob) => {
       const file = new File([blob], ts, { type: "image/jpeg" });
-      const userTapped = localStorage.getItem('LS_USER_TAPPED') === '1';
-      const shareGranted = sessionStorage.getItem('LS_SHARE_GRANTED') === '1';
-
-      // --- 初回のみ共有シートを開いて許可を確保 ---
-      if (!shareGranted && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({
-          files: [file],
-          title: ts,
-          text: "画像を保存を選択してください"
-        }).then(()=>{
-          sessionStorage.setItem('LS_SHARE_GRANTED','1');
-        }).catch(()=>{});
-        return;
-      }
-
-      // --- 2回目以降：完全自動保存 ---
+      // --- 自動・手動共通で共有シートへ ---
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({
           files: [file],
           title: ts,
-          text: ""
+          text: "画像を保存を選択してください"
         }).catch(()=>{});
       } else {
+        // Fallback: ダウンロード
         const url = URL.createObjectURL(file);
         const a = document.createElement("a");
         a.href = url;
