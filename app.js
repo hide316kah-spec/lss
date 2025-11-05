@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（自動シャッター復活＋仕様維持版）
+// ランプシャッター app.js（Safari完全自動保存対応版）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -18,6 +18,7 @@ if (window.__LS_RUNNING__) {
   const camBtn = document.getElementById("cam");
   const okSound = new Audio("ok_voice.mp3");
 
+  // --- カメラ起動 ---
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
     .then((stream) => {
@@ -31,6 +32,7 @@ if (window.__LS_RUNNING__) {
     })
     .catch((err) => alert("カメラアクセスが拒否されました: " + err));
 
+  // --- 判定ループ ---
   function startDetect() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -91,31 +93,32 @@ if (window.__LS_RUNNING__) {
       statusEl.className = `badge ${result === "OK" ? "ok" : "ng"}`;
 
       const now = performance.now();
-      // --- ここだけ修正（try/catchで自動シャッターを安全に呼ぶ） ---
       if (result === "OK" && lastResult !== "OK" && now - lastShotTime > 2500) {
         lastShotTime = now;
-        try {
-          triggerShot(true);
-        } catch (e) {
-          console.warn("Auto shot skipped:", e);
-        }
+        setTimeout(() => {
+          try { triggerShot(true); } 
+          catch(e){ console.warn("Auto shot skipped:", e); }
+        }, 100);
       }
-      // --------------------------------------------------------------
       lastResult = result;
       requestAnimationFrame(loop);
     }
     loop();
   }
 
+  // --- イラストタップで撮影 ---
   camBtn.addEventListener("click", () => triggerShot(false));
 
+  // --- 撮影処理 ---
   function triggerShot(auto) {
     flash.style.transition = "opacity 0.15s";
     flash.style.opacity = 0.9;
     setTimeout(() => (flash.style.opacity = 0), 150);
     navigator.vibrate?.(200);
 
-    if (auto) okSound.play();
+    if (auto) {
+      setTimeout(() => { okSound.play().catch(()=>{}); }, 200);
+    }
 
     const canvas = document.createElement("canvas");
     const vw = video.videoWidth, vh = video.videoHeight;
@@ -145,14 +148,27 @@ if (window.__LS_RUNNING__) {
       const file = new File([blob], ts, { type: "image/jpeg" });
       const url = URL.createObjectURL(file);
       const userTapped = localStorage.getItem('LS_USER_TAPPED') === '1';
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-      if (navigator.canShare && navigator.canShare({ files: [file] }) && userTapped) {
+      // --- Safari自動保存: 共有シートを呼ばずダウンロードのみ ---
+      if (auto && isSafari) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = ts;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } 
+      // --- 通常（手動タップなど）では共有シート ---
+      else if (navigator.canShare && navigator.canShare({ files: [file] }) && userTapped) {
         navigator.share({
           files: [file],
           title: ts,
           text: "画像を保存を選択してください"
         }).catch(()=>{});
-      } else {
+      } 
+      // --- どちらでもない環境（古いブラウザなど） ---
+      else {
         const a = document.createElement("a");
         a.href = url;
         a.download = ts;
@@ -161,7 +177,7 @@ if (window.__LS_RUNNING__) {
         a.remove();
       }
 
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
     }, "image/jpeg", 0.92);
   }
 }
