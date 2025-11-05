@@ -1,5 +1,5 @@
 // ==============================
-// ランプシャッター app.js（自動・セルフ統一保存版）
+// ランプシャッター app.js（自動撮影＋タップ保存型）
 // ==============================
 
 if (window.__LS_RUNNING__) {
@@ -19,6 +19,7 @@ if (window.__LS_RUNNING__) {
   const okSound = new Audio("ok_voice.mp3");
 
   let startTime = performance.now();
+  let pendingFile = null;
 
   navigator.mediaDevices
     .getUserMedia({ video: { facingMode: "environment" } })
@@ -146,25 +147,39 @@ if (window.__LS_RUNNING__) {
     const ts = `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}_${ok ? "OK" : "NG?"}.jpg`;
 
     canvas.toBlob((blob) => {
-      const file = new File([blob], ts, { type: "image/jpeg" });
-      // --- 自動・手動共通で共有シートへ ---
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({
-          files: [file],
-          title: ts,
-          text: "画像を保存を選択してください"
-        }).catch(()=>{});
-      } else {
-        // Fallback: ダウンロード
-        const url = URL.createObjectURL(file);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = ts;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(()=>URL.revokeObjectURL(url), 1000);
+      pendingFile = new File([blob], ts, { type: "image/jpeg" });
+
+      if (auto) {
+        // 保存誘導を表示
+        const msg = document.createElement("div");
+        msg.textContent = "📸 画面をタップして保存";
+        msg.style.position = "fixed";
+        msg.style.top = "50%";
+        msg.style.left = "50%";
+        msg.style.transform = "translate(-50%, -50%)";
+        msg.style.background = "rgba(0,0,0,0.7)";
+        msg.style.color = "#fff";
+        msg.style.padding = "14px 22px";
+        msg.style.borderRadius = "10px";
+        msg.style.font = "600 18px system-ui";
+        msg.style.zIndex = "999";
+        document.body.appendChild(msg);
+        setTimeout(()=>msg.remove(), 2000);
       }
     }, "image/jpeg", 0.92);
   }
+
+  // --- 次タップで保存を実行 ---
+  document.body.addEventListener("click", () => {
+    if (!pendingFile) return;
+    const file = pendingFile;
+    pendingFile = null;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: file.name,
+        text: "画像を保存を選択してください"
+      }).catch(()=>{});
+    }
+  });
 }
