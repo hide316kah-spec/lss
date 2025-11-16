@@ -1,4 +1,4 @@
-// DOM取得
+// DOM
 const video      = document.getElementById("video");
 const modeSelect = document.getElementById("modeSelect");
 const app        = document.getElementById("app");
@@ -16,25 +16,23 @@ const dayBtn   = document.getElementById("dayBtn");
 const nightBtn = document.getElementById("nightBtn");
 const debugBtn = document.getElementById("debugBtn");
 
-// モード管理
-let currentMode = "day";   // "day" | "night" | "debug"
-let running = false;
-let lastResult = "NG?";
-let lastStats  = null;
+// モード
+let currentMode = "day";     // "day" | "night" | "debug"
+let running     = false;
+let lastResult  = "NG?";
+let lastStats   = null;
 
-// 判定閾値（暫定値：後で調査モードで詰める）
+// 閾値（暫定。調査モードで後で詰める）
 const THRESHOLDS = {
   day:   { redFracMax:0.010, greenFracMin:0.030 },
   night: { redFracMax:0.010, greenFracMin:0.030 }
 };
 
-// モード表示更新
 function setMode(mode){
   currentMode = mode;
   if(mode === "day")   modeLabel.textContent = "昼モード";
   if(mode === "night") modeLabel.textContent = "夜モード";
   if(mode === "debug") modeLabel.textContent = "調査モード";
-
   debugPanel.hidden = (mode !== "debug");
 }
 
@@ -57,7 +55,7 @@ async function startCamera(){
   await video.play();
 }
 
-// ROIのピクセル範囲を算出（video座標系）
+// ROI（video座標系。以前と同じ比率）
 function getRoiRect(){
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -70,33 +68,31 @@ function getRoiRect(){
   return {rx, ry, rw, rh};
 }
 
-// フレーム判定
+// 1フレーム判定
 function judgeFrame(){
   const vw = video.videoWidth;
   const vh = video.videoHeight;
-  if(!vw || !vh) return { result:"NG?", stats:null };
+  if(!vw || !vh) return {result:"NG?", stats:null};
 
   workCanvas.width  = vw;
   workCanvas.height = vh;
   wctx.drawImage(video,0,0,vw,vh);
 
   const rect = getRoiRect();
-  if(!rect) return { result:"NG?", stats:null };
-
+  if(!rect) return {result:"NG?", stats:null};
   const {rx, ry, rw, rh} = rect;
-  const img = wctx.getImageData(rx,ry,rw,rh).data;
 
+  const img = wctx.getImageData(rx,ry,rw,rh).data;
   let reds=0, greens=0, total=0;
   let Rsum=0,Gsum=0,Bsum=0;
 
-  for(let i=0;i<img.length;i+=4*6){ // 6px間隔
+  for(let i=0;i<img.length;i+=4*6){ // 6px間引き
     const r = img[i];
     const g = img[i+1];
     const b = img[i+2];
     const sum = r+g+b+1;
     const rn = r/sum;
     const gn = g/sum;
-    const bn = b/sum;
 
     Rsum += r; Gsum += g; Bsum += b; total++;
 
@@ -112,18 +108,16 @@ function judgeFrame(){
   const Gavg = Gsum/Math.max(1,total);
   const Bavg = Bsum/Math.max(1,total);
 
-  // 昼／夜の閾値（暫定）
   const th = THRESHOLDS[currentMode] || THRESHOLDS.day;
   const isNG = redFrac > th.redFracMax;
   const isOK = !isNG && greenFrac > th.greenFracMin;
 
   const result = isOK ? "OK" : "NG?";
-
-  const stats = { redFrac, greenFrac, Ravg, Gavg, Bavg };
-  return { result, stats };
+  const stats  = {redFrac, greenFrac, Ravg, Gavg, Bavg};
+  return {result, stats};
 }
 
-// OK/NG表示更新
+// バッジ更新
 function updateBadge(result){
   badge.textContent = result;
   badge.classList.remove("ok","ng");
@@ -153,21 +147,19 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-// シャッター押下
+// シャッター押下（バイブ＋フラッシュ＋撮影）
 shutter.addEventListener("click", async () => {
-  // バイブ
+  // バイブ（iOS Safari は非対応だが入れておく）
   try{ navigator.vibrate && navigator.vibrate([40,40,40]); }catch(e){}
 
-  // フラッシュ
-  flash.classList.add("flash-on");
-  flash.addEventListener("animationend", () => {
-    flash.classList.remove("flash-on");
-  }, { once:true });
+  // フラッシュ（CSSアニメをやめて確実に白くする）
+  flash.style.opacity = "0.9";
+  setTimeout(()=>{ flash.style.opacity = "0"; }, 120);
 
   // 音声
-  if(lastResult === "OK") {
+  if(lastResult === "OK"){
     speak("判定オーケー。");
-  } else {
+  }else{
     speak("確認してください。");
   }
 
@@ -179,7 +171,7 @@ shutter.addEventListener("click", async () => {
   }
 });
 
-// 撮影＆保存（OK / NG? 焼き込み）
+// 撮影＆保存（OK ／ NG? の焼き込み）
 async function captureAndSave(mark){
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -211,7 +203,7 @@ async function captureAndSave(mark){
   setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
 
-// 音声出力（女性優先）
+// 音声（女性ボイス優先）
 function speak(text){
   try{
     const u = new SpeechSynthesisUtterance(text);
@@ -220,14 +212,14 @@ function speak(text){
     u.pitch = 1.2;
     const vs = speechSynthesis.getVoices();
     const v = vs.find(v=>v.lang.startsWith("ja") && /female|女/i.test(v.name))
-            || vs.find(v=>v.lang.startsWith("ja"));
+             || vs.find(v=>v.lang.startsWith("ja"));
     if(v) u.voice = v;
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
   }catch(e){}
 }
 
-// モード選択 → 起動
+// モード選択から起動
 async function startMode(mode){
   setMode(mode);
   modeSelect.hidden = true;

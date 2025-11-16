@@ -8,9 +8,10 @@ html, body {
   background:#000;
 }
 
-/* モード選択画面（普通の縦スクロール） */
+/* ── モード選択画面 ── */
+
 #modeSelect {
-  padding:12px 0 24px;
+  padding:12px 0 20px;
   background:#fff;
 }
 
@@ -21,13 +22,14 @@ html, body {
 }
 
 #modeSelect img {
-  width:94%;
-  max-width:480px;
-  margin:12px 0;
+  width:60vw;              /* 少し小さくして3枚ほぼ1画面に収める */
+  max-width:380px;
+  margin:8px 0;
   display:block;
 }
 
-/* カメラ画面はフルスクリーン固定 */
+/* ── カメラ画面 ── */
+
 #app {
   position:fixed;
   inset:0;
@@ -43,20 +45,18 @@ html, body {
   background:#000;
 }
 
-/* カメラ映像 */
 #video {
   width:100%;
   height:100%;
   object-fit:cover;
 }
 
-/* ROI 枠（右上・横長） */
+/* ROI（右上・横長。以前と同じ比率＆位置） */
 #roi {
   position:absolute;
   border:3px dashed #00ff7f;
   border-radius:8px;
   pointer-events:none;
-  /* 画面基準の位置・サイズ（カメラ映像も同じ比率で使う） */
   width:58vw;
   height:26vw;
   right:4vw;
@@ -64,7 +64,7 @@ html, body {
   z-index:5;
 }
 
-/* フラッシュ */
+/* フラッシュ（JSでopacityを直接いじる） */
 #flash {
   position:absolute;
   inset:0;
@@ -73,15 +73,8 @@ html, body {
   pointer-events:none;
   z-index:8;
 }
-.flash-on {
-  animation:flashAnim 0.25s ease;
-}
-@keyframes flashAnim {
-  0% {opacity:0.9;}
-  100% {opacity:0;}
-}
 
-/* OK / NG バッジ */
+/* OK / NGバッジ */
 .badge {
   position:absolute;
   left:10px;
@@ -93,12 +86,8 @@ html, body {
   color:#fff;
   z-index:9;
 }
-.badge.ok {
-  background:#14b86a;
-}
-.badge.ng {
-  background:#e53935;
-}
+.badge.ok { background:#14b86a; }
+.badge.ng { background:#e53935; }
 
 /* モードラベル（画面上部中央） */
 #modeLabel {
@@ -115,7 +104,7 @@ html, body {
   z-index:20;
 }
 
-/* 調査モード表示 */
+/* 調査モードパネル */
 #debugPanel {
   position:absolute;
   left:10px;
@@ -132,7 +121,7 @@ html, body {
   white-space:pre;
 }
 
-/* シャッターボタン（カメラPNG） */
+/* シャッター（カメラPNG） */
 #shutter {
   position:absolute;
   bottom:18px;

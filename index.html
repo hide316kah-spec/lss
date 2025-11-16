@@ -21,20 +21,25 @@
     </div>
   </div>
 
-  <!-- カメラ画面（起動後に表示） -->
+  <!-- カメラ画面 -->
   <div id="app" hidden>
     <div id="stage">
       <video id="video" playsinline autoplay muted></video>
-      <!-- 右上横長ROI -->
+
+      <!-- 右上横長ROI（見た目用） -->
       <div id="roi"></div>
+
       <!-- フラッシュ -->
       <div id="flash"></div>
-      <!-- OK / NG 表示 -->
-      <div id="badge" class="badge">NG?</div>
-      <!-- 調査モード出力 -->
+
+      <!-- OK / NGバッジ -->
+      <div id="badge" class="badge ng">NG?</div>
+
+      <!-- 調査モードパネル -->
       <div id="debugPanel" hidden>
         <pre id="debugText"></pre>
       </div>
+
       <!-- 手動シャッター -->
       <button id="shutter" aria-label="シャッター">
         <img src="camera.png" alt="シャッターボタン">
@@ -42,7 +47,7 @@
     </div>
   </div>
 
-  <!-- 判定・撮影用ワークキャンバス（画面には出さない） -->
+  <!-- 判定用ワークキャンバス（画面には出さない） -->
   <canvas id="workCanvas" hidden></canvas>
 
   <script src="app.js"></script>
