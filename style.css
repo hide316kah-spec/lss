@@ -1,16 +1,117 @@
+/* 画面全体リセット */
+html, body {
+  margin:0;
+  padding:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#fff;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+
+/* モード選択画面（最前面） */
 #modeSelect {
   position:absolute;
   inset:0;
+  z-index:9999;
+  background:#fff;
+  overflow-y:scroll;               /* ←これで全部見える */
+  -webkit-overflow-scrolling:touch;
+}
+
+.modeWrap {
   display:flex;
   flex-direction:column;
   align-items:center;
-  justify-content:center;
-  z-index:9999;  /* ←最前面固定 */
-  background:#fff; /* 画面全体を覆う */
+  padding:20px 0;
 }
 
 #modeSelect img {
   width:90%;
   max-width:420px;
-  margin:12px 0;
+  margin:20px 0;
+}
+
+/* カメラ画面（背面） */
+#app {
+  position:absolute;
+  inset:0;
+  z-index:1;
+}
+
+/* モード表示ラベル */
+#modeLabel {
+  position:absolute;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,0,0,0.45);
+  color:#fff;
+  padding:6px 14px;
+  border-radius:6px;
+  font-weight:700;
+  font-size:17px;
+  z-index:50;
+}
+
+/* ROI */
+#roi {
+  position:absolute;
+  border:3px dashed #00ff00;
+  pointer-events:none;
+  z-index:10;
+}
+
+/* フラッシュ */
+#flash {
+  position:absolute;
+  inset:0;
+  background:#fff;
+  opacity:0;
+  pointer-events:none;
+  z-index:40;
+}
+
+.fade {
+  animation:flashAnim 0.25s ease;
+}
+
+@keyframes flashAnim {
+  0% {opacity:0.9;}
+  100% {opacity:0;}
+}
+
+/* 調査モードパネル */
+#debugPanel {
+  position:absolute;
+  left:10px;
+  bottom:10px;
+  padding:8px 12px;
+  background:rgba(0,0,0,0.55);
+  color:#fff;
+  border-radius:8px;
+  font-size:13px;
+  z-index:70;
+}
+
+#debugText {
+  margin:0;
+  white-space:pre;
+}
+
+/* シャッター */
+#shutter {
+  position:absolute;
+  bottom:16px;
+  left:50%;
+  transform:translateX(-50%);
+  background:none;
+  border:none;
+  padding:0;
+  z-index:80;
+}
+
+#shutter img {
+  width:120px;
+  height:auto;
 }
