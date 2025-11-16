@@ -9,33 +9,32 @@
 
 <body>
 
-  <!-- 現在モード表示 -->
-  <div id="modeLabel">昼モード</div>
+  <!-- モード表示ラベル（初期は隠す） -->
+  <div id="modeLabel" style="display:none;">昼モード</div>
 
-  <div id="app">
+  <!-- モード選択画面 -->
+  <div id="modeSelect">
+    <img id="dayBtn" src="day.png" alt="昼モード">
+    <img id="nightBtn" src="night.png" alt="夜モード">
+    <img id="debugBtn" src="debug.png" alt="調査モード">
+  </div>
+
+  <!-- カメラ画面 -->
+  <div id="app" style="display:none;">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
     <div id="roi"></div>
     <div id="flash"></div>
 
-    <!-- 調査モード用パネル -->
     <div id="debugPanel" hidden>
       <pre id="debugText"></pre>
     </div>
 
-    <!-- シャッターボタン（カメラPNG使用） -->
-    <button id="shutter" aria-label="シャッター">
-      <img src="camera.png" alt="シャッターボタン">
+    <button id="shutter">
+      <img src="camera.png" alt="camera">
     </button>
   </div>
 
-  <!-- モード選択UI（昼／夜／調査のイラスト） -->
-  <div id="modeSelect">
-    <img src="day.png" id="dayBtn" alt="昼モード">
-    <img src="night.png" id="nightBtn" alt="夜モード">
-    <img src="debug.png" id="debugBtn" alt="調査モード">
-  </div>
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
