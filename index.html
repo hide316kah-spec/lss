@@ -1,61 +1,65 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>ランプシャッター</title>
-
-  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
-
-  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="manifest.json">
 </head>
-
 <body>
-
-  <!-- モードラベル -->
-  <div id="modeLabel" hidden></div>
-
   <!-- モード選択 -->
-  <div id="modeSelect">
-    <div class="modeWrap">
-      <img id="dayBtn"   src="hero_day.png">
-      <img id="nightBtn" src="hero_night.png">
-      <img id="debugBtn" src="hero_debug.png">
-    </div>
-  </div>
+  <section id="mode-select">
+    <h1 class="app-title">ランプシャッター</h1>
+    <p class="app-sub">使いたいモードのイラストをタップ</p>
+    <button class="mode-card" data-mode="day">
+      <img src="day.png" alt="昼モード">
+    </button>
+    <button class="mode-card" data-mode="night">
+      <img src="night.png" alt="夜モード">
+    </button>
+    <button class="mode-card" data-mode="debug">
+      <img src="debug.png" alt="調査モード">
+    </button>
+  </section>
 
-  <!-- 本体 -->
-  <div id="app" hidden>
+  <!-- カメラアプリ本体 -->
+  <section id="app" hidden>
+    <header id="topbar">
+      <span id="badge" class="badge ng">NG?</span>
+      <span id="mode-label" class="mode-label">昼モード</span>
+    </header>
+
     <div id="stage">
-
-      <video id="video" playsinline autoplay muted></video>
-
-      <!-- ROI（JSで位置とサイズ制御） -->
+      <video id="cam" playsinline autoplay muted></video>
       <div id="roi"></div>
 
-      <!-- OK/NG -->
-      <div id="badge" class="badge ng">NG?</div>
-
-      <!-- 調査モード用 -->
-      <div id="debugPanel" hidden>
-        <pre id="debugText"></pre>
+      <!-- 調査モード用デバッグパネル -->
+      <div id="debug-panel">
+        <div>Ravg : <span id="r-avg">0</span></div>
+        <div>Gavg : <span id="g-avg">0</span></div>
+        <div>Bavg : <span id="b-avg">0</span></div>
+        <div>red% : <span id="r-frac">0</span></div>
+        <div>green%: <span id="g-frac">0</span></div>
+        <div>blue% : <span id="b-frac">0</span></div>
       </div>
 
-      <!-- フラッシュ演出 -->
+      <!-- 昼/夜モード用の小さな数値表示 -->
+      <div id="mini-panel">
+        <span id="mini-r">R%</span>
+        <span id="mini-g">G%</span>
+      </div>
+
+      <!-- フラッシュ -->
       <div id="flash"></div>
 
-      <!-- シャッター -->
-      <button id="shutter">
-        <img src="camera.png">
+      <!-- カメラアイコン（シャッター） -->
+      <button id="shutter" aria-label="撮影">
+        <img src="camera.png" alt="シャッターボタン">
       </button>
-
     </div>
-  </div>
-
-  <canvas id="workCanvas" hidden></canvas>
+  </section>
 
   <script src="app.js"></script>
-
 </body>
 </html>

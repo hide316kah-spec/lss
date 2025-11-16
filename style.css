@@ -1,124 +1,218 @@
-html, body {
-  margin:0;
-  padding:0;
-  width:100%;
-  height:100%;
-  background:#000;
-  font-family:-apple-system, system-ui, sans-serif;
-  overscroll-behavior:none;
+:root {
+  /* ROI：Aサイズ（ちょい大きめ） */
+  --roi-w: 60vw;
+  --roi-h: 27vw;
+  --roi-top: 6vh;
+  --roi-right: 4vw;
 }
 
-/* モード選択画面 */
-#modeSelect {
-  padding:10px 0 20px;
-  background:#fff;
-}
-.modeWrap {
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-}
-#modeSelect img {
-  width:62vw;
-  max-width:420px;
-  margin:12px 0;
+* {
+  box-sizing: border-box;
 }
 
-/* カメラ本体 */
+body {
+  margin: 0;
+  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  background: #111;
+  color: #fff;
+}
+
+/* ===== モード選択 ===== */
+
+#mode-select {
+  min-height: 100vh;
+  padding: 16px 0 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #111;
+}
+
+.app-title {
+  margin: 6px 0 2px;
+  font-size: 1.4rem;
+}
+
+.app-sub {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.mode-card {
+  border: none;
+  padding: 0;
+  background: none;
+  width: 96vw;
+  max-width: 480px;
+  margin: 8px 0;
+}
+
+.mode-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.7);
+}
+
+/* ===== カメラアプリ ===== */
+
 #app {
-  position:fixed;
-  inset:0;
-  background:#000;
-}
-#stage {
-  position:relative;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-}
-#video {
-  width:100%;
-  height:100%;
-  object-fit:cover;
+  position: absolute;
+  inset: 0;
+  background: #000;
 }
 
-/* ROI（B案：ちょい拡大） */
-#roi {
-  position:absolute;
-  pointer-events:none;
-  border:3px dashed #00ff7f;
-  border-radius:8px;
-  z-index:10;
+#topbar {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  justify-content: space-between;
+  z-index: 5;
+  pointer-events: none;
 }
 
-/* OK/NG */
 .badge {
-  position:absolute;
-  left:10px;
-  top:10px;
-  padding:4px 11px;
-  border-radius:999px;
-  font-weight:700;
-  color:#fff;
-  z-index:15;
-}
-.ok { background:#17c56a; }
-.ng { background:#e53935; }
-
-/* モード名表示 */
-#modeLabel {
-  position:fixed;
-  top:8px;
-  left:50%;
-  transform:translateX(-50%);
-  background:rgba(0,0,0,0.55);
-  padding:6px 12px;
-  border-radius:7px;
-  font-size:16px;
-  color:#fff;
-  z-index:20;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
-/* 調査モード */
-#debugPanel {
-  position:absolute;
-  left:12px;
-  bottom:15px;
-  padding:12px 14px;
-  background:rgba(0,0,0,0.6);
-  color:#fff;
-  font-size:20px; /* ←大きくする */
-  border-radius:8px;
-  line-height:1.35;
-  z-index:18;
-}
-#debugText {
-  margin:0;
-  white-space:pre;
+.badge.ok {
+  background: #12b76a;
 }
 
-/* シャッター */
-#shutter {
-  position:absolute;
-  bottom:18px;
-  left:50%;
-  transform:translateX(-50%);
-  background:none;
-  border:none;
-  padding:0;
-  z-index:20;
+.badge.ng {
+  background: #e25454;
 }
-#shutter img {
-  width:130px;
+
+.mode-label {
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.6);
+  font-size: 0.9rem;
+}
+
+/* カメラステージ */
+
+#stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+#cam {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ROI */
+
+#roi {
+  position: absolute;
+  width: var(--roi-w);
+  height: var(--roi-h);
+  top: var(--roi-top);
+  right: var(--roi-right);
+  border: 3px dashed #30e89b;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+/* 調査モード用パネル（左端・上下中央） */
+
+#debug-panel {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  z-index: 4;
+}
+
+/* 昼夜モード用ミニパネル（左下） */
+
+#mini-panel {
+  position: absolute;
+  left: 10px;
+  bottom: 80px;
+  padding: 4px 6px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 6px;
+  font-size: 0.7rem;
+  z-index: 4;
 }
 
 /* フラッシュ */
+
 #flash {
-  position:absolute;
-  inset:0;
-  background:#fff;
-  opacity:0;
-  pointer-events:none;
-  z-index:30;
-  transition:opacity 0.15s;
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.flash-on {
+  animation: flash 0.25s ease-out;
+}
+
+@keyframes flash {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* シャッターボタン（カメライラスト） */
+
+#shutter {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;           /* 少し下げる */
+  transform: translateX(-50%);
+  background: none;
+  border: none;
+  padding: 0;
+  z-index: 4;
+}
+
+#shutter img {
+  display: block;
+  width: 60%;             /* 60%に縮小 */
+  max-width: 220px;
+  margin: 0 auto;
+}
+
+/* モード別表示制御 */
+
+body[data-mode="debug"] #badge {
+  display: none;          /* 調査モードはOK/NGバッジ無し */
+}
+
+body[data-mode="debug"] #debug-panel {
+  display: block;
+}
+
+body[data-mode="debug"] #mini-panel {
+  display: none;
+}
+
+body[data-mode="day"] #debug-panel,
+body[data-mode="night"] #debug-panel {
+  display: none;
+}
+
+body[data-mode="day"] #mini-panel,
+body[data-mode="night"] #mini-panel {
+  display: block;
 }
