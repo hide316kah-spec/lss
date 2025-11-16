@@ -1,242 +1,167 @@
-//---------------------------------------------------------
-// 基本変数
-//---------------------------------------------------------
-let mode = null;                  // "day" / "night" / "debug"
-let video = null;
-let roiBox = null;
-let badge = null;
-let shutterBtn = null;
-let debugPanel = null;
-let debugText = null;
-let flash = null;
-
+let mode = "";
 let stream = null;
-let wCanvas = null;
-let wCtx = null;
+let video = document.getElementById("video");
+let roiBox = document.getElementById("roi");
+let badge = document.getElementById("badge");
+let modeLabel = document.getElementById("modeLabel");
+let debugPanel = document.getElementById("debugPanel");
+let debugText = document.getElementById("debugText");
+let shutter = document.getElementById("shutter");
+let flash = document.getElementById("flash");
 
-// ROI 実寸（判定は JS 側で video 座標にフィットさせる）
-let roi = { x: 0, y: 0, w: 0, h: 0 };
+const workCanvas = document.getElementById("workCanvas");
+const wctx = workCanvas.getContext("2d");
 
-// 判定間隔
-const INTERVAL = 200;   // 速い & 実用重視
+/* モード選択 */
+document.getElementById("dayBtn").onclick = () => startMode("day");
+document.getElementById("nightBtn").onclick = () => startMode("night");
+document.getElementById("debugBtn").onclick = () => startMode("debug");
 
-//---------------------------------------------------------
-// 起動
-//---------------------------------------------------------
-window.addEventListener("DOMContentLoaded", () => {
-    video       = document.getElementById("video");
-    roiBox      = document.getElementById("roi");
-    badge       = document.getElementById("badge");
-    shutterBtn  = document.getElementById("shutter");
-    debugPanel  = document.getElementById("debugPanel");
-    debugText   = document.getElementById("debugText");
-    flash       = document.getElementById("flash");
-    wCanvas     = document.getElementById("workCanvas");
-    wCtx        = wCanvas.getContext("2d");
-
-    document.getElementById("dayBtn").onclick   = () => startMode("day");
-    document.getElementById("nightBtn").onclick = () => startMode("night");
-    document.getElementById("debugBtn").onclick = () => startMode("debug");
-
-    shutterBtn.onclick = () => takePhoto();
-});
-
-//---------------------------------------------------------
-// モード開始
-//---------------------------------------------------------
 async function startMode(m) {
-    mode = m;
+  mode = m;
+  document.getElementById("modeSelect").hidden = true;
+  document.getElementById("app").hidden = false;
 
-    document.getElementById("modeSelect").hidden = true;
-    document.getElementById("app").hidden = false;
+  modeLabel.hidden = false;
+  modeLabel.textContent = 
+    mode === "day" ? "昼モード" :
+    mode === "night" ? "夜モード" :
+    "調査モード";
 
-    document.getElementById("modeLabel").innerText =
-        mode === "day"   ? "昼モード" :
-        mode === "night" ? "夜モード" :
-                           "調査モード";
-    document.getElementById("modeLabel").hidden = false;
+  if (mode === "debug") badge.hidden = true;
+  else badge.hidden = false;
 
-    if (mode === "debug") debugPanel.hidden = false;
-    else debugPanel.hidden = true;
+  await startCamera();
+  requestAnimationFrame(loop);
 
-    await startCamera();
-    startLoop();
+  /* Safari のURLバーを隠す */
+  setTimeout(() => { window.scrollTo(0,1); }, 300);
 }
 
-//---------------------------------------------------------
-// カメラ開始
-//---------------------------------------------------------
+/* カメラ起動 */
 async function startCamera() {
-    if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-    }
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode:"environment" },
+    audio: false
+  });
+  video.srcObject = stream;
 
-    stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-            facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-        },
-        audio: false
-    });
-
-    video.srcObject = stream;
-
-    return new Promise(resolve => {
-        video.onloadedmetadata = () => {
-            video.play();
-            updateROI();   // video サイズ確定後に ROI 初期化
-            resolve();
-        };
-    });
+  await video.play();
 }
 
-//---------------------------------------------------------
-// ROI を “以前と同じ形” に復元（右上・横長）
-// video の縦横比にフィットさせる
-//---------------------------------------------------------
+/* ROI の B案サイズ（JS で video 座標に追従） */
 function updateROI() {
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh) return;
+  let vw = video.videoWidth;
+  let vh = video.videoHeight;
 
-    // 以前の実用サイズに合わせてチューニング
-    roi.w = Math.floor(vw * 0.45);   // 横 45%
-    roi.h = Math.floor(vh * 0.22);   // 縦 22%
-    roi.x = vw - roi.w - Math.floor(vw * 0.02);  // 右端 2%
-    roi.y = Math.floor(vh * 0.15);               // 上 15%
+  if (!vw || !vh) return;
 
-    // 画面上に ROI を反映（CSS ≠ 判定位置、JSで絶対座標配置）
-    const rect = video.getBoundingClientRect();
-    const sx = rect.width / vw;
-    const sy = rect.height / vh;
+  const boxW = vw * 0.63;   // 58% → 63%（横 +5%）
+  const boxH = vh * 0.30;   // 26% → 30%（縦 +4%）
 
-    roiBox.style.width  = `${roi.w * sx}px`;
-    roiBox.style.height = `${roi.h * sy}px`;
-    roiBox.style.left   = `${rect.left + roi.x * sx}px`;
-    roiBox.style.top    = `${rect.top  + roi.y * sy}px`;
+  const left = vw - boxW - vw * 0.04;
+  const top  = vh * 0.05;
+
+  /* video → CSS 変換 */
+  const rect = video.getBoundingClientRect();
+  const scaleX = rect.width / vw;
+  const scaleY = rect.height / vh;
+
+  roiBox.style.left = (left * scaleX + rect.left) + "px";
+  roiBox.style.top  = (top  * scaleY + rect.top)  + "px";
+  roiBox.style.width  = (boxW * scaleX) + "px";
+  roiBox.style.height = (boxH * scaleY) + "px";
+
+  return { left, top, boxW, boxH };
 }
 
-//---------------------------------------------------------
-// 判定ループ
-//---------------------------------------------------------
-function startLoop() {
-    setInterval(() => {
-        if (!video.videoWidth) return;
-        updateROI();   // 各フレームごとに ROI 再フィット
+/* 判定ループ */
+function loop() {
+  const roi = updateROI();
+  if (!roi) return requestAnimationFrame(loop);
 
-        const result = analyzeROI();
+  const { left, top, boxW, boxH } = roi;
 
-        if (mode !== "debug") {
-            if (result.redPct > 1.0) {
-                showNG();
-            } else if (result.greenPct > 3.0) {
-                showOK();
-            } else {
-                showNG();
-            }
-        } else {
-            badge.hidden = true;
-        }
+  workCanvas.width = boxW;
+  workCanvas.height = boxH;
+  wctx.drawImage(video, left, top, boxW, boxH, 0, 0, boxW, boxH);
 
-    }, INTERVAL);
-}
+  const data = wctx.getImageData(0,0,boxW,boxH).data;
 
-//---------------------------------------------------------
-// ROI解析
-//---------------------------------------------------------
-function analyzeROI() {
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh) return { redPct:0, greenPct:0 };
+  let r=0,g=0,b=0, cnt = data.length/4;
+  for (let i=0;i<data.length;i+=4){
+    r+=data[i];
+    g+=data[i+1];
+    b+=data[i+2];
+  }
+  r/=cnt; g/=cnt; b/=cnt;
 
-    wCanvas.width  = roi.w;
-    wCanvas.height = roi.h;
+  const redp = (r/(r+g+b))*100;
+  const greenp = (g/(r+g+b))*100;
+  const bluep = (b/(r+g+b))*100;
 
-    wCtx.drawImage(video, roi.x, roi.y, roi.w, roi.h, 0, 0, roi.w, roi.h);
-    const img = wCtx.getImageData(0, 0, roi.w, roi.h).data;
+  if (mode === "debug") {
+    debugPanel.hidden = false;
+    debugText.textContent =
+      `Ravg : ${r.toFixed(1)}\n`+
+      `Gavg : ${g.toFixed(1)}\n`+
+      `Bavg : ${b.toFixed(1)}\n`+
+      `red% : ${redp.toFixed(2)}\n`+
+      `green%: ${greenp.toFixed(2)}\n`+
+      `blue% : ${bluep.toFixed(2)}`;
+  }
 
-    let rSum=0, gSum=0, bSum=0;
-    const skip = 6; // 軽量化
-    let count=0;
-
-    for (let i=0; i<img.length; i+=4*skip) {
-        const r = img[i];
-        const g = img[i+1];
-        const b = img[i+2];
-        rSum += r; gSum += g; bSum += b;
-        count++;
+  /* 昼夜モードの判定だけ有効 */
+  if (mode !== "debug") {
+    if (redp > 1.0) {
+      badge.textContent = "NG?";
+      badge.className = "badge ng";
+    } else if (greenp > 3.0) {
+      badge.textContent = "OK";
+      badge.className = "badge ok";
+    } else {
+      badge.textContent = "NG?";
+      badge.className = "badge ng";
     }
+  }
 
-    const Ravg = rSum / count;
-    const Gavg = gSum / count;
-    const Bavg = bSum / count;
-
-    const redPct   = (Ravg / (Ravg+Gavg+Bavg)) * 100;
-    const greenPct = (Gavg / (Ravg+Gavg+Bavg)) * 100;
-
-    if (mode === "debug") {
-        debugText.innerText =
-          `Ravg : ${Ravg.toFixed(1)}\n` +
-          `Gavg : ${Gavg.toFixed(1)}\n` +
-          `Bavg : ${Bavg.toFixed(1)}\n` +
-          `red% : ${redPct.toFixed(2)}\n` +
-          `green%: ${greenPct.toFixed(2)}`;
-    }
-
-    return { redPct, greenPct };
+  requestAnimationFrame(loop);
 }
 
-//---------------------------------------------------------
-// 表示：OK / NG
-//---------------------------------------------------------
-function showOK() {
-    badge.hidden = false;
-    badge.classList.remove("ng");
-    badge.classList.add("ok");
-    badge.innerText = "OK";
+/* シャッター */
+shutter.onclick = () => {
+  doFlash();
+  doVibe();
+
+  setTimeout(() => {
+    saveImage();
+  }, 200);
+};
+
+/* フラッシュ演出 */
+function doFlash(){
+  flash.style.opacity = 1;
+  setTimeout(()=> flash.style.opacity=0,150);
 }
 
-function showNG() {
-    badge.hidden = false;
-    badge.classList.remove("ok");
-    badge.classList.add("ng");
-    badge.innerText = "NG?";
+/* バイブ */
+function doVibe(){
+  if (navigator.vibrate) navigator.vibrate([80,50,80]);
 }
 
-//---------------------------------------------------------
-// 撮影
-//---------------------------------------------------------
-function takePhoto() {
-    if (!video.videoWidth) return;
+/* 保存（JPEG固定） */
+function saveImage(){
+  let canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  let ctx = canvas.getContext("2d");
+  ctx.drawImage(video,0,0);
 
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
+  let url = canvas.toDataURL("image/jpeg",0.92);
 
-    wCanvas.width  = vw;
-    wCanvas.height = vh;
-    wCtx.drawImage(video, 0, 0, vw, vh);
-
-    // フラッシュ
-    flash.style.opacity = 1;
-    setTimeout(() => flash.style.opacity = 0, 120);
-
-    // バイブ
-    if (navigator.vibrate) navigator.vibrate([80]);
-
-    // レンダリング＆保存
-    wCanvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const ts = Date.now();
-
-        const tag = (badge.innerText === "OK") ? "_OK" : "_NG";
-        a.download = `lamp_${ts}${tag}.png`;
-
-        a.href = url;
-        a.target = "_blank";  // iOS 写真アプリに乗りやすくする
-        a.click();
-
-        URL.revokeObjectURL(url);
-    }, "image/png");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `lamp_${Date.now()}.jpg`;
+  a.target = "_blank";
+  a.click();
 }

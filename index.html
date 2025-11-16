@@ -1,45 +1,49 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>ランプシャッター</title>
-  <link rel="stylesheet" href="style.css" />
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+
+  <meta name="theme-color" content="#000000">
 </head>
 
 <body>
 
-  <!-- モード名 -->
-  <div id="modeLabel" hidden>昼モード</div>
+  <!-- モードラベル -->
+  <div id="modeLabel" hidden></div>
 
   <!-- モード選択 -->
   <div id="modeSelect">
     <div class="modeWrap">
-      <img id="dayBtn"   src="day.png">
-      <img id="nightBtn" src="night.png">
-      <img id="debugBtn" src="debug.png">
+      <img id="dayBtn"   src="hero_day.png">
+      <img id="nightBtn" src="hero_night.png">
+      <img id="debugBtn" src="hero_debug.png">
     </div>
   </div>
 
-  <!-- カメラ画面 -->
+  <!-- 本体 -->
   <div id="app" hidden>
     <div id="stage">
 
       <video id="video" playsinline autoplay muted></video>
 
-      <!-- ROI（JSで位置とサイズを制御） -->
+      <!-- ROI（JSで位置とサイズ制御） -->
       <div id="roi"></div>
-
-      <!-- フラッシュ -->
-      <div id="flash"></div>
 
       <!-- OK/NG -->
       <div id="badge" class="badge ng">NG?</div>
 
-      <!-- 調査モード表示 -->
+      <!-- 調査モード用 -->
       <div id="debugPanel" hidden>
         <pre id="debugText"></pre>
       </div>
+
+      <!-- フラッシュ演出 -->
+      <div id="flash"></div>
 
       <!-- シャッター -->
       <button id="shutter">
@@ -50,6 +54,8 @@
   </div>
 
   <canvas id="workCanvas" hidden></canvas>
+
   <script src="app.js"></script>
+
 </body>
 </html>
