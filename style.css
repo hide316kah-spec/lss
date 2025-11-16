@@ -1,119 +1,102 @@
-/* 全体リセット */
 html, body {
-  margin:0;
-  padding:0;
-  width:100%;
-  height:100%;
-  font-family:-apple-system,system-ui,sans-serif;
+  margin:0; padding:0;
+  width:100%; height:100%;
   background:#000;
+  font-family:-apple-system,system-ui,sans-serif;
 }
 
-/* ── モード選択画面 ── */
-
+/* モード選択 */
 #modeSelect {
-  padding:12px 0 20px;
+  padding:10px 0 20px;
   background:#fff;
 }
-
 .modeWrap {
   display:flex;
   flex-direction:column;
   align-items:center;
 }
-
 #modeSelect img {
-  width:60vw;              /* 少し小さくして3枚ほぼ1画面に収める */
+  width:60vw;
   max-width:380px;
   margin:8px 0;
-  display:block;
 }
 
-/* ── カメラ画面 ── */
-
+/* カメラ画面 */
 #app {
   position:fixed;
   inset:0;
   background:#000;
-  z-index:0;
 }
-
 #stage {
   position:relative;
   width:100%;
   height:100%;
   overflow:hidden;
-  background:#000;
 }
-
 #video {
   width:100%;
   height:100%;
   object-fit:cover;
 }
 
-/* ROI（右上・横長。以前と同じ比率＆位置） */
+/* ROI（枠だけ。サイズはJSが制御） */
 #roi {
   position:absolute;
   border:3px dashed #00ff7f;
   border-radius:8px;
   pointer-events:none;
-  width:58vw;
-  height:26vw;
-  right:4vw;
-  top:6vh;
   z-index:5;
 }
 
-/* フラッシュ（JSでopacityを直接いじる） */
+/* フラッシュ */
 #flash {
   position:absolute;
   inset:0;
   background:#fff;
   opacity:0;
+  z-index:7;
   pointer-events:none;
-  z-index:8;
 }
 
-/* OK / NGバッジ */
+/* OK / NG */
 .badge {
   position:absolute;
   left:10px;
   top:10px;
   padding:4px 10px;
-  border-radius:999px;
-  font-size:16px;
   font-weight:700;
+  border-radius:999px;
   color:#fff;
   z-index:9;
 }
-.badge.ok { background:#14b86a; }
-.badge.ng { background:#e53935; }
+.ok { background:#14b86a; }
+.ng { background:#e53935; }
 
-/* モードラベル（画面上部中央） */
+/* モードラベル */
 #modeLabel {
   position:fixed;
   top:6px;
   left:50%;
   transform:translateX(-50%);
-  padding:6px 14px;
-  background:rgba(0,0,0,.55);
+  background:rgba(0,0,0,0.5);
   color:#fff;
+  padding:6px 12px;
   border-radius:6px;
   font-size:15px;
-  font-weight:700;
   z-index:20;
 }
 
-/* 調査モードパネル */
+/* 調査モード */
 #debugPanel {
   position:absolute;
   left:10px;
   bottom:10px;
   padding:8px 12px;
-  border-radius:8px;
-  background:rgba(0,0,0,.55);
+  background:rgba(0,0,0,0.6);
   color:#fff;
-  font-size:12px;
+  border-radius:6px;
+  font-size:13px;
+  line-height:1.3;      /* ← B が切れないよう調整 */
   z-index:9;
 }
 #debugText {
@@ -121,14 +104,14 @@ html, body {
   white-space:pre;
 }
 
-/* シャッター（カメラPNG） */
+/* シャッター */
 #shutter {
   position:absolute;
   bottom:18px;
   left:50%;
   transform:translateX(-50%);
-  border:none;
   background:none;
+  border:none;
   padding:0;
   z-index:9;
 }

@@ -9,47 +9,47 @@
 
 <body>
 
-  <!-- 現在モード表示 -->
+  <!-- モード名 -->
   <div id="modeLabel" hidden>昼モード</div>
 
-  <!-- モード選択画面 -->
+  <!-- モード選択 -->
   <div id="modeSelect">
     <div class="modeWrap">
-      <img id="dayBtn"   src="day.png"   alt="昼モード">
-      <img id="nightBtn" src="night.png" alt="夜モード">
-      <img id="debugBtn" src="debug.png" alt="調査モード">
+      <img id="dayBtn"   src="day.png">
+      <img id="nightBtn" src="night.png">
+      <img id="debugBtn" src="debug.png">
     </div>
   </div>
 
   <!-- カメラ画面 -->
   <div id="app" hidden>
     <div id="stage">
+
       <video id="video" playsinline autoplay muted></video>
 
-      <!-- 右上横長ROI（見た目用） -->
+      <!-- ROI（JSで位置とサイズを制御） -->
       <div id="roi"></div>
 
       <!-- フラッシュ -->
       <div id="flash"></div>
 
-      <!-- OK / NGバッジ -->
+      <!-- OK/NG -->
       <div id="badge" class="badge ng">NG?</div>
 
-      <!-- 調査モードパネル -->
+      <!-- 調査モード表示 -->
       <div id="debugPanel" hidden>
         <pre id="debugText"></pre>
       </div>
 
-      <!-- 手動シャッター -->
-      <button id="shutter" aria-label="シャッター">
-        <img src="camera.png" alt="シャッターボタン">
+      <!-- シャッター -->
+      <button id="shutter">
+        <img src="camera.png">
       </button>
+
     </div>
   </div>
 
-  <!-- 判定用ワークキャンバス（画面には出さない） -->
   <canvas id="workCanvas" hidden></canvas>
-
   <script src="app.js"></script>
 </body>
 </html>
