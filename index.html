@@ -9,33 +9,41 @@
 
 <body>
 
-  <!-- モードラベル -->
-  <div id="modeLabel" style="display:none;">昼モード</div>
+  <!-- 現在モード表示 -->
+  <div id="modeLabel" hidden>昼モード</div>
 
-  <!-- モード選択 -->
+  <!-- モード選択画面 -->
   <div id="modeSelect">
     <div class="modeWrap">
-      <img id="dayBtn" src="day.png" alt="昼モード">
+      <img id="dayBtn"   src="day.png"   alt="昼モード">
       <img id="nightBtn" src="night.png" alt="夜モード">
       <img id="debugBtn" src="debug.png" alt="調査モード">
     </div>
   </div>
 
-  <!-- カメラ画面 -->
-  <div id="app" style="display:none;">
-    <video id="video" playsinline autoplay muted></video>
-    <canvas id="canvas"></canvas>
-    <div id="roi"></div>
-    <div id="flash"></div>
-
-    <div id="debugPanel" hidden>
-      <pre id="debugText"></pre>
+  <!-- カメラ画面（起動後に表示） -->
+  <div id="app" hidden>
+    <div id="stage">
+      <video id="video" playsinline autoplay muted></video>
+      <!-- 右上横長ROI -->
+      <div id="roi"></div>
+      <!-- フラッシュ -->
+      <div id="flash"></div>
+      <!-- OK / NG 表示 -->
+      <div id="badge" class="badge">NG?</div>
+      <!-- 調査モード出力 -->
+      <div id="debugPanel" hidden>
+        <pre id="debugText"></pre>
+      </div>
+      <!-- 手動シャッター -->
+      <button id="shutter" aria-label="シャッター">
+        <img src="camera.png" alt="シャッターボタン">
+      </button>
     </div>
-
-    <button id="shutter">
-      <img src="camera.png" alt="camera">
-    </button>
   </div>
+
+  <!-- 判定・撮影用ワークキャンバス（画面には出さない） -->
+  <canvas id="workCanvas" hidden></canvas>
 
   <script src="app.js"></script>
 </body>
