@@ -1,21 +1,20 @@
-/* 画面全体リセット */
+/* リセット */
 html, body {
   margin:0;
   padding:0;
   width:100%;
   height:100%;
-  overflow:hidden;
   background:#fff;
   font-family: -apple-system, system-ui, sans-serif;
 }
 
-/* モード選択画面（最前面） */
+/* モード選択（縦スクロールで全表示） */
 #modeSelect {
   position:absolute;
   inset:0;
   z-index:9999;
   background:#fff;
-  overflow-y:scroll;               /* ←これで全部見える */
+  overflow-y:scroll;
   -webkit-overflow-scrolling:touch;
 }
 
@@ -32,14 +31,14 @@ html, body {
   margin:20px 0;
 }
 
-/* カメラ画面（背面） */
+/* カメラ画面 */
 #app {
   position:absolute;
   inset:0;
   z-index:1;
 }
 
-/* モード表示ラベル */
+/* モードラベル */
 #modeLabel {
   position:absolute;
   top:10px;
@@ -62,7 +61,7 @@ html, body {
   z-index:10;
 }
 
-/* フラッシュ */
+/* フラッシュ演出 */
 #flash {
   position:absolute;
   inset:0;
@@ -81,7 +80,7 @@ html, body {
   100% {opacity:0;}
 }
 
-/* 調査モードパネル */
+/* 調査モード */
 #debugPanel {
   position:absolute;
   left:10px;
