@@ -1,251 +1,271 @@
 (() => {
+  // ---------- DOM 取得 ----------
+  const modeSelect = document.getElementById("mode-select");
+  const dayBtn = document.getElementById("dayBtn");
+  const nightBtn = document.getElementById("nightBtn");
+  const inspectBtn = document.getElementById("inspectBtn");
 
-const cam = document.getElementById("cam");
-const roi = document.getElementById("roi");
-const badge = document.getElementById("badge");
-const modeLabel = document.getElementById("modeLabel");
-const inspectBox = document.getElementById("inspectBox");
-const inspectTxt = document.getElementById("inspectTxt");
-const shutter = document.getElementById("shutter");
-const flash = document.getElementById("flash");
+  const app = document.getElementById("app");
+  const cam = document.getElementById("cam");
+  const preview = document.getElementById("previewCanvas");
+  const capture = document.getElementById("captureCanvas");
 
-let currentMode = "day";
-let stream = null;
-let rafId = null;
+  const modeLabel = document.getElementById("modeLabel");
+  const badge = document.getElementById("badge");
+  const inspectBox = document.getElementById("inspectBox");
+  const inspectTxt = document.getElementById("inspectTxt");
+  const shutter = document.getElementById("shutter");
+  const flashEffect = document.getElementById("flashEffect");
 
-/* ----------------------------------------------------
-   モードごとの初期セット
----------------------------------------------------- */
-window.selectMode = async function(mode) {
-  currentMode = mode;
+  // ---------- 状態 ----------
+  let currentMode = "day"; // "day" | "night" | "debug"
+  let stream = null;
+  let lastMetrics = null; // { rAvg,gAvg,bAvg,redPct,greenPct,bluePct }
+  let lastJudge = false;
 
-  // モード表示
-  modeLabel.textContent =
-    mode === "day" ? "昼モード" :
-    mode === "night" ? "夜モード" :
-    "調査モード";
+  // ROI サイズ（A サイズ・右上固定）
+  function calcRoi(w, h) {
+    const roiW = Math.floor(w * 0.42);
+    const roiH = Math.floor(h * 0.24); // Aサイズ（縦やや広め）
+    const marginRight = Math.floor(w * 0.06);
+    const marginTop = Math.floor(h * 0.14);
 
-  // UI切替
-  if (mode === "inspect") {
-    badge.style.display = "none";
-    inspectBox.style.display = "block";
-  } else {
-    badge.style.display = "block";
-    inspectBox.style.display = "none";
-    badge.textContent = "NG?";
-    badge.className = "ng";
+    const x = w - roiW - marginRight;
+    const y = marginTop;
+
+    return { x, y, w: roiW, h: roiH };
   }
 
-  // カメラ画面表示
-  document.getElementById("app").hidden = false;
-
-  // カメラ開始
-  if (!stream) await startCamera();
-
-  // ループ開始
-  if (!rafId) rafId = requestAnimationFrame(loop);
-};
-
-/* ----------------------------------------------------
-   カメラ起動
----------------------------------------------------- */
-async function startCamera(){
-  const cList = [
-    { video:{facingMode:{exact:"environment"}}, audio:false },
-    { video:{facingMode:"environment"}, audio:false },
-    { video:true, audio:false }
-  ];
-  for(const c of cList){
-    try{
-      stream = await navigator.mediaDevices.getUserMedia(c);
-      break;
-    }catch(e){}
-  }
-  if(!stream) throw new Error("カメラが見つかりません");
-
-  cam.srcObject = stream;
-  await cam.play();
-}
-
-/* ----------------------------------------------------
-   ROI(Aサイズ) の座標計算
----------------------------------------------------- */
-function getROI(){
-  const vw = cam.videoWidth;
-  const vh = cam.videoHeight;
-  if(!vw || !vh) return null;
-
-  // Aサイズ
-  const rw = vw * 0.52;
-  const rh = vw * 0.28;
-
-  const rx = vw - rw - vw*0.04;
-  const ry = vh * 0.06;
-
-  return {rx, ry, rw, rh};
-}
-
-/* ----------------------------------------------------
-   メインループ
----------------------------------------------------- */
-function loop(){
-  rafId = requestAnimationFrame(loop);
-
-  const roiData = getROI();
-  if(!roiData) return;
-
-  const {rx, ry, rw, rh} = roiData;
-
-  const vw = cam.videoWidth;
-  const vh = cam.videoHeight;
-
-  const cvs = loop.cvs || (loop.cvs = document.createElement("canvas"));
-  cvs.width = vw;
-  cvs.height = vh;
-  const ctx = cvs.getContext("2d", { willReadFrequently:true });
-
-  ctx.drawImage(cam, 0, 0, vw, vh);
-
-  // ROI 抽出
-  const imgData = ctx.getImageData(rx, ry, rw, rh).data;
-
-  let Rsum=0, Gsum=0, Bsum=0;
-  let Rhit=0, Ghit=0, Bhit=0;
-  let total=0;
-
-  for(let i=0;i<imgData.length;i+=4*6){
-    const r = imgData[i];
-    const g = imgData[i+1];
-    const b = imgData[i+2];
-    const sum = r+g+b+1;
-    const rn=r/sum, gn=g/sum, bn=b/sum;
-
-    Rsum+=r; Gsum+=g; Bsum+=b; total++;
-
-    const isRed = (r>90 && rn>0.40 && r-g>18 && r-b>18);
-    if(isRed) Rhit++;
-
-    const isGreen = (g>80 && gn>0.40 && g-r>10 && g-b>10);
-    if(isGreen) Ghit++;
-
-    const isBlue = (b>80 && bn>0.40 && b-r>10 && b-g>10);
-    if(isBlue) Bhit++;
-  }
-
-  const Ravg = Rsum/total;
-  const Gavg = Gsum/total;
-  const Bavg = Bsum/total;
-
-  const Rfrac = Rhit/total;
-  const Gfrac = Ghit/total;
-  const Bfrac = Bhit/total;
-
-  /* --------- 調査モードの表示 --------- */
-  if(currentMode==="inspect"){
-    inspectTxt.textContent =
-      `Ravg : ${Ravg.toFixed(1)}\n`+
-      `Gavg : ${Gavg.toFixed(1)}\n`+
-      `Bavg : ${Bavg.toFixed(1)}\n`+
-      `red% : ${(Rfrac*100).toFixed(2)}\n`+
-      `green%: ${(Gfrac*100).toFixed(2)}\n`+
-      `blue% : ${(Bfrac*100).toFixed(2)}`;
-  }
-
-  /* --------- 昼/夜の判定 --------- */
-  if(currentMode==="day" || currentMode==="night"){
-    const NG = Rfrac>0.010;
-    const OK = !NG && Gfrac>0.030;
-
-    if(OK){
-      badge.textContent="OK";
-      badge.className="ok";
-    }else{
-      badge.textContent="NG?";
-      badge.className="ng";
+  // ---------- カメラ起動 ----------
+  async function startCameraOnce() {
+    if (stream) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("この端末ではカメラが使えません。");
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+      cam.srcObject = stream;
+      await cam.play();
+      loop();
+    } catch (err) {
+      console.error(err);
+      alert("カメラの起動に失敗しました。権限設定を確認してください。");
     }
   }
-}
 
-/* ----------------------------------------------------
-   フラッシュ & バイブ
----------------------------------------------------- */
-function doFlash(){
-  flash.classList.remove("flash-on");
-  void flash.offsetWidth;
-  flash.classList.add("flash-on");
-}
+  // ---------- メインループ ----------
+  function loop() {
+    if (!stream || cam.readyState < 2) {
+      requestAnimationFrame(loop);
+      return;
+    }
 
-function doVibe(){
-  try{
-    if(navigator.vibrate) navigator.vibrate([40,40,40]);
-  }catch(e){}
-}
+    const vw = cam.videoWidth || window.innerWidth;
+    const vh = cam.videoHeight || window.innerHeight;
 
-/* ----------------------------------------------------
-   シャッター
----------------------------------------------------- */
-shutter.addEventListener("click", ()=>{
-  doFlash();
-  doVibe();
+    if (preview.width !== vw || preview.height !== vh) {
+      preview.width = vw;
+      preview.height = vh;
+    }
 
-  setTimeout(()=>{
-    const mark = getResultMark();
-    saveImage(mark);
-  },350);
-});
+    const ctx = preview.getContext("2d");
+    ctx.drawImage(cam, 0, 0, vw, vh);
 
-function getResultMark(){
-  if(currentMode==="inspect") return "DBG";
-  const t = badge.textContent || "NG?";
-  return t;
-}
+    const roi = calcRoi(vw, vh);
 
-/* ----------------------------------------------------
-   JPEG保存（軽量）
----------------------------------------------------- */
-function saveImage(mark){
-  const vw = cam.videoWidth;
-  const vh = cam.videoHeight;
-  if(!vw||!vh) return;
+    // ROI 内の平均色を計算
+    const img = ctx.getImageData(roi.x, roi.y, roi.w, roi.h);
+    const data = img.data;
+    let rSum = 0,
+      gSum = 0,
+      bSum = 0;
 
-  const cvs = document.createElement("canvas");
-  cvs.width=vw; cvs.height=vh;
-  const ctx = cvs.getContext("2d");
+    for (let i = 0; i < data.length; i += 4) {
+      rSum += data[i];
+      gSum += data[i + 1];
+      bSum += data[i + 2];
+    }
+    const count = data.length / 4 || 1;
+    const rAvg = rSum / count;
+    const gAvg = gSum / count;
+    const bAvg = bSum / count;
+    const total = rAvg + gAvg + bAvg || 1;
 
-  ctx.drawImage(cam,0,0,vw,vh);
+    const redPct = (rAvg / total) * 100;
+    const greenPct = (gAvg / total) * 100;
+    const bluePct = (bAvg / total) * 100;
 
-  // ラベル
-  const now = new Date();
-  const y=now.getFullYear();
-  const m=String(now.getMonth()+1).padStart(2,"0");
-  const d=String(now.getDate()).padStart(2,"0");
-  const hh=String(now.getHours()).padStart(2,"0");
-  const mm=String(now.getMinutes()).padStart(2,"0");
-  const ss=String(now.getSeconds()).padStart(2,"0");
+    lastMetrics = { rAvg, gAvg, bAvg, redPct, greenPct, bluePct };
 
-  const ts=`${y}/${m}/${d} ${hh}:${mm}:${ss}`;
+    // ROI 枠を描画
+    ctx.save();
+    ctx.strokeStyle = "rgba(0,255,0,0.9)";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([10, 6]);
+    ctx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+    ctx.restore();
 
-  const barH = Math.floor(vh*0.06);
-  ctx.fillStyle="rgba(0,0,0,0.6)";
-  ctx.fillRect(0,vh-barH,vw,barH);
+    updateUI();
 
-  ctx.fillStyle="#fff";
-  ctx.font=`bold ${Math.floor(vw/26)}px -apple-system`;
-  ctx.textBaseline="middle";
-  ctx.fillText(`日時:${ts}   結果:${mark}`,18,vh-barH/2);
+    requestAnimationFrame(loop);
+  }
 
-  // JPEG（軽量）
-  const quality = 0.70;
-  const dataURL = cvs.toDataURL("image/jpeg",quality);
+  // ---------- 判定ロジック ----------
+  function judge(mode, m) {
+    if (!m) return false;
 
-  const fname = `lamp_${y}${m}${d}_${hh}${mm}${ss}_${mark}.jpg`;
+    if (mode === "day") {
+      // 昼モード（赤 LED 優先）：暫定値
+      return m.redPct > 36 && m.rAvg > 120;
+    }
+    if (mode === "night") {
+      // 夜モード（暗めを想定）：暫定値
+      return m.redPct > 32 && m.rAvg > 110;
+    }
+    return false;
+  }
 
-  const a=document.createElement("a");
-  a.href=dataURL;
-  a.download=fname;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+  function modeNameJa() {
+    if (currentMode === "day") return "昼モード";
+    if (currentMode === "night") return "夜モード";
+    return "調査モード";
+  }
 
+  function updateUI() {
+    modeLabel.textContent = modeNameJa();
+
+    if (!lastMetrics) return;
+
+    const m = lastMetrics;
+
+    const text =
+      `Ravg : ${m.rAvg.toFixed(1)}\n` +
+      `Gavg : ${m.gAvg.toFixed(1)}\n` +
+      `Bavg : ${m.bAvg.toFixed(1)}\n` +
+      `red% : ${m.redPct.toFixed(2)}\n` +
+      `green%: ${m.greenPct.toFixed(2)}\n` +
+      `blue% : ${m.bluePct.toFixed(2)}`;
+
+    inspectTxt.textContent = text;
+
+    if (currentMode === "debug") {
+      badge.style.display = "none";
+      inspectBox.classList.remove("small");
+      return;
+    }
+
+    inspectBox.classList.add("small");
+    badge.style.display = "block";
+
+    const ok = judge(currentMode, m);
+    lastJudge = ok;
+
+    badge.textContent = ok ? "OK" : "NG?";
+    badge.classList.toggle("ok", ok);
+    badge.classList.toggle("ng", !ok);
+  }
+
+  // ---------- シャッター ----------
+  function triggerFlash() {
+    flashEffect.classList.add("active");
+    setTimeout(() => {
+      flashEffect.classList.remove("active");
+    }, 120);
+  }
+
+  function triggerVibration() {
+    if (navigator.vibrate) {
+      navigator.vibrate(120);
+    }
+  }
+
+  function formatFileTimestamp() {
+    const d = new Date();
+    const pad = (n, w = 2) => String(n).padStart(w, "0");
+    return (
+      d.getFullYear().toString() +
+      pad(d.getMonth() + 1) +
+      pad(d.getDate()) +
+      "_" +
+      pad(d.getHours()) +
+      pad(d.getMinutes()) +
+      pad(d.getSeconds())
+    );
+  }
+
+  function saveCurrentFrame() {
+    if (!stream || !lastMetrics || cam.readyState < 2) return;
+
+    const vw = cam.videoWidth;
+    const vh = cam.videoHeight;
+    if (!vw || !vh) return;
+
+    capture.width = vw;
+    capture.height = vh;
+
+    const ctx = capture.getContext("2d");
+    ctx.drawImage(cam, 0, 0, vw, vh);
+
+    const roi = calcRoi(vw, vh);
+
+    // ROI 枠
+    ctx.save();
+    ctx.strokeStyle = "rgba(0,255,0,0.9)";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([10, 6]);
+    ctx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+    ctx.restore();
+
+    // 文字焼き込み（左上）
+    const resultLabel =
+      currentMode === "debug" ? "DBG" : lastJudge ? "OK" : "NG?";
+    const stamp = `lamp ${formatFileTimestamp()} ${modeNameJa()} ${resultLabel}`;
+
+    ctx.save();
+    ctx.font = "24px -apple-system, BlinkMacSystemFont, sans-serif";
+    const textWidth = ctx.measureText(stamp).width + 20;
+    const boxHeight = 34;
+
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(8, 8, textWidth, boxHeight);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(stamp, 18, 34);
+    ctx.restore();
+
+    // JPEG で保存（軽め）
+    const dataUrl = capture.toDataURL("image/jpeg", 0.6);
+    const filename = `lamp_${formatFileTimestamp()}_${resultLabel}.jpg`;
+
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  shutter.addEventListener("click", () => {
+    if (!stream) return;
+    triggerFlash();
+    triggerVibration();
+    saveCurrentFrame();
+  });
+
+  // ---------- モード選択 ----------
+  function enterMode(mode) {
+    currentMode = mode;
+    modeSelect.style.display = "none";
+    app.classList.remove("hidden");
+    updateUI();
+    startCameraOnce();
+  }
+
+  dayBtn.addEventListener("click", () => enterMode("day"));
+  nightBtn.addEventListener("click", () => enterMode("night"));
+  inspectBtn.addEventListener("click", () => enterMode("debug"));
 })();
