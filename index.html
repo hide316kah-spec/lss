@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ランプシャッター</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000">
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- ▼ モード選択（3枚全表示） -->
+<div id="modeSelect">
+  <img src="mode_day.png" id="btnDay" alt="昼モード">
+  <img src="mode_night.png" id="btnNight" alt="夜モード">
+  <img src="mode_inspect.png" id="btnInspect" alt="調査モード">
+</div>
+
+<!-- ▼ 撮影UI -->
+<div id="app" hidden>
+  <div id="modeLabel"></div>
+
+  <video id="cam" autoplay playsinline></video>
+
+  <!-- ROI（右上 Aサイズ） -->
+  <div id="roi"></div>
+
+  <!-- 判定バッジ（昼/夜） -->
+  <div id="badge" class="ng" hidden>NG?</div>
+
+  <!-- 調査モードの数値（左中央） -->
+  <div id="inspectBox" hidden>
+    <pre id="inspectTxt"></pre>
+  </div>
+
+  <!-- シャッターボタン -->
+  <img id="shutter" src="camera.png" alt="">
+
+  <!-- フラッシュ -->
+  <div id="flash"></div>
+</div>
+
+<script src="app.js"></script>
+
+<!-- モード選択の遷移 -->
+<script>
+function selectMode(m){
+  document.getElementById("modeSelect").style.display = "none";
+  document.getElementById("app").hidden = false;
+
+  const ml = document.getElementById("modeLabel");
+  ml.textContent = (m==="day"?"昼モード":m==="night"?"夜モード":"調査モード");
+  window.currentMode = m;
+}
+
+document.getElementById("btnDay").onclick     = ()=>selectMode("day");
+document.getElementById("btnNight").onclick   = ()=>selectMode("night");
+document.getElementById("btnInspect").onclick = ()=>selectMode("inspect");
+</script>
+
+</body>
+</html>
