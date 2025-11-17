@@ -1,65 +1,81 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta charset="UTF-8">
   <title>ランプシャッター</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- モード選択 -->
-  <section id="mode-select">
-    <h1 class="app-title">ランプシャッター</h1>
-    <p class="app-sub">使いたいモードのイラストをタップ</p>
-    <button class="mode-card" data-mode="day">
-      <img src="day.png" alt="昼モード">
-    </button>
-    <button class="mode-card" data-mode="night">
-      <img src="night.png" alt="夜モード">
-    </button>
-    <button class="mode-card" data-mode="debug">
-      <img src="debug.png" alt="調査モード">
-    </button>
-  </section>
-
-  <!-- カメラアプリ本体 -->
-  <section id="app" hidden>
-    <header id="topbar">
-      <span id="badge" class="badge ng">NG?</span>
-      <span id="mode-label" class="mode-label">昼モード</span>
-    </header>
-
-    <div id="stage">
-      <video id="cam" playsinline autoplay muted></video>
-      <div id="roi"></div>
-
-      <!-- 調査モード用デバッグパネル -->
-      <div id="debug-panel">
-        <div>Ravg : <span id="r-avg">0</span></div>
-        <div>Gavg : <span id="g-avg">0</span></div>
-        <div>Bavg : <span id="b-avg">0</span></div>
-        <div>red% : <span id="r-frac">0</span></div>
-        <div>green%: <span id="g-frac">0</span></div>
-        <div>blue% : <span id="b-frac">0</span></div>
-      </div>
-
-      <!-- 昼/夜モード用の小さな数値表示 -->
-      <div id="mini-panel">
-        <span id="mini-r">R%</span>
-        <span id="mini-g">G%</span>
-      </div>
-
-      <!-- フラッシュ -->
-      <div id="flash"></div>
-
-      <!-- カメラアイコン（シャッター） -->
-      <button id="shutter" aria-label="撮影">
-        <img src="camera.png" alt="シャッターボタン">
+  <!-- モード選択画面 -->
+  <div id="modeSelect">
+    <h1 class="title">ランプシャッター</h1>
+    <p class="subtitle">モードを選択してください</p>
+    <div class="mode-grid">
+      <button class="mode-card mode-day" data-mode="day">
+        <img src="images/mode_day.png" alt="昼モード" class="mode-illust">
+        <div class="mode-label">昼モード</div>
+      </button>
+      <button class="mode-card mode-night" data-mode="night">
+        <img src="images/mode_night.png" alt="夜モード" class="mode-illust">
+        <div class="mode-label">夜モード</div>
+      </button>
+      <button class="mode-card mode-inspect" data-mode="inspect">
+        <img src="images/mode_inspect.png" alt="調査モード" class="mode-illust">
+        <div class="mode-label">調査モード</div>
       </button>
     </div>
-  </section>
+    <p class="hint">
+      ※ iPhone Safari 推奨・PWA インストール推奨
+    </p>
+  </div>
 
-  <script src="app.js"></script>
+  <!-- メインアプリ画面 -->
+  <div id="app" class="hidden">
+    <!-- 上部：現在モード名 -->
+    <header id="modeHeader">
+      <span id="modeName">モード</span>
+      <button id="backToModeSelect" aria-label="モード選択に戻る">← モード変更</button>
+    </header>
+
+    <!-- カメラ＆ROI -->
+    <main id="mainArea">
+      <div id="videoWrapper">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="previewCanvas"></canvas>
+        <!-- フラッシュ用オーバーレイ -->
+        <div id="flashOverlay"></div>
+      </div>
+
+      <!-- 調査モードの数値パネル（昼/夜では小さく表示） -->
+      <section id="inspectPanel">
+        <div class="inspect-row"><span>Ravg</span><span id="rAvgVal">-</span></div>
+        <div class="inspect-row"><span>Gavg</span><span id="gAvgVal">-</span></div>
+        <div class="inspect-row"><span>Bavg</span><span id="bAvgVal">-</span></div>
+        <div class="inspect-row"><span>red%</span><span id="redPctVal">-</span></div>
+        <div class="inspect-row"><span>green%</span><span id="greenPctVal">-</span></div>
+        <div class="inspect-row"><span>blue%</span><span id="bluePctVal">-</span></div>
+      </section>
+    </main>
+
+    <!-- 撮影ボタン（カメライラスト・小さめ） -->
+    <div id="shutterContainer">
+      <button id="shutterButton" aria-label="撮影">
+        <img src="images/camera.png" alt="撮影" id="shutterImage">
+      </button>
+    </div>
+
+    <!-- OK 音声（女性声） -->
+    <audio id="okSound" src="audio/ok_voice_female.mp3" preload="auto"></audio>
+
+    <!-- 撮影用オフスクリーン canvas（非表示） -->
+    <canvas id="captureCanvas" class="hidden"></canvas>
+  </div>
+
+  <script src="app.js" defer></script>
 </body>
 </html>
