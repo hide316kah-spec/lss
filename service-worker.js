@@ -1,47 +1,48 @@
-const CACHE_NAME = 'lamp-shutter-v1';
-const CACHE_FILES = [
-  './',
-  './index.html',
-  './style.css',
-  './app.js',
-  './manifest.json',
-  './images/mode_day.png',
-  './images/mode_night.png',
-  './images/mode_inspect.png',
-  './images/camera.png',
-  './audio/ok_voice_female.mp3'
+// ------------------------------------------------------
+// LampShutter Service Worker (安全版・キャッシュ腐敗防止)
+// ------------------------------------------------------
+
+const CACHE_NAME = "lampshutter-v1";
+
+// 事前キャッシュする最低限のファイル
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./mode_day.png",
+  "./mode_night.png",
+  "./mode_inspect.png",
+  "./camera.png"
 ];
 
-self.addEventListener('install', event => {
+// インストール
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(CACHE_FILES))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', event => {
+// activate
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
+    caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
       )
     )
   );
+  self.clients.claim();
 });
 
-self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-
+// fetch（必ず最新取得優先）
+self.addEventListener("fetch", (event) => {
   event.respondWith(
-    caches.match(req).then(cached => {
-      if (cached) return cached;
-      return fetch(req).then(res => {
-        const resClone = res.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(req, resClone));
-        return res;
-      });
-    })
+    fetch(event.request)
+      .then((response) => response)            // 常にネット優先
+      .catch(() => caches.match(event.request)) // オフライン時キャッシュ
   );
 });
