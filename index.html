@@ -1,47 +1,46 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport"
-      content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>ランプシャッター</title>
 
 <!-- PWA -->
-<link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#000000" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000">
+
+<link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-<!-- ▼ モード選択画面（最初に必ず表示） -->
+<!-- ▼ モード選択画面 -->
 <div id="modeSelect">
-  <img src="mode_day.png" id="btnDay"   alt="昼モード" />
-  <img src="mode_night.png" id="btnNight" alt="夜モード" />
-  <img src="mode_inspect.png" id="btnInspect" alt="調査モード" />
+  <img src="mode_day.png" id="dayBtn" alt="昼モード">
+  <img src="mode_night.png" id="nightBtn" alt="夜モード">
+  <img src="mode_inspect.png" id="inspectBtn" alt="調査モード">
 </div>
 
-<!-- ▼ 撮影UI（モード決定後に表示） -->
-<div id="app" hidden>
+<!-- ▼ カメラUI -->
+<div id="app" style="display:none;">
   <div id="modeLabel"></div>
-
-  <!-- カメラ映像 -->
-  <video id="cam" playsinline autoplay muted></video>
-
-  <!-- ROI（右上固定・Aサイズ） -->
+  <video id="cam" autoplay playsinline></video>
   <div id="roi"></div>
 
-  <!-- 判定バッジ（昼/夜のみ） -->
-  <div id="badge" hidden></div>
+  <div id="badge" class="ng" style="display:none;">NG?</div>
 
-  <!-- 調査モード用の数値ラベル -->
-  <div id="inspectBox" hidden>
+  <div id="inspectBox" style="display:none;">
     <pre id="inspectTxt"></pre>
   </div>
 
-  <!-- シャッターボタン（イラスト） -->
-  <img src="camera.png" id="shutter" alt="shutter" />
+  <img id="shutter" src="camera.png" alt="">
 </div>
 
 <script src="app.js"></script>
+<script>
+document.getElementById("dayBtn").onclick = () => selectMode("day");
+document.getElementById("nightBtn").onclick = () => selectMode("night");
+document.getElementById("inspectBtn").onclick = () => selectMode("inspect");
+</script>
 </body>
 </html>
