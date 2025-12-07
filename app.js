@@ -141,7 +141,7 @@ window.addEventListener('DOMContentLoaded', () => {
     captureCanvas.width = rect.width;
     captureCanvas.height = rect.height;
 
-    // ROI 設定：右上・横長固定
+    // ROI 設定：右上・横長固定（プレビューのみ）
     const margin = 10;
     const roiWidth = rect.width * 0.5;
     const roiHeight = rect.height * 0.18;
@@ -165,7 +165,7 @@ window.addEventListener('DOMContentLoaded', () => {
       // 現フレームをプレビュー canvas に描画
       previewCtx.drawImage(video, 0, 0, w, h);
 
-      // ROI 枠表示
+      // ROI 枠表示（プレビューだけ）
       previewCtx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
       previewCtx.setLineDash([6, 4]);
       previewCtx.lineWidth = 2;
@@ -274,7 +274,7 @@ window.addEventListener('DOMContentLoaded', () => {
     captureCtx.clearRect(0, 0, w, h);
     captureCtx.drawImage(video, 0, 0, w, h);
 
-    // ROI 認識は captureCanvas 上で再度計算（保存画像には枠は描かない）
+    // ROI 認識は captureCanvas 上で再度計算（保存画像にはROI枠は描かない）
     const roiOnCapture = {
       x: roi.x,
       y: roi.y,
@@ -285,7 +285,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // モード別判定
     const decision = decideResult(currentMode, stats);
-    // decision: { code: 'OK' | 'NG' | 'DBG', label: 'OK' | 'NG?' | '調査' | '', playOk: boolean }
 
     // 画像に日付＋結果を焼き込み
     const now = new Date();
@@ -293,6 +292,11 @@ window.addEventListener('DOMContentLoaded', () => {
     const fileBase = formatDateForFile(now);    // YYYYMMDD_HHMMSS
 
     overlayText(captureCtx, w, h, dateStr, decision.label);
+
+    // ★ 調査モードだけ、数値パネルも焼き込む
+    if (currentMode === 'inspect') {
+      overlayInspectStats(captureCtx, w, h, stats);
+    }
 
     // OK のときだけ音声（昼/夜モードのみ）
     if (decision.playOk && okSound) {
@@ -344,7 +348,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const { rAvg, gAvg, bAvg, redPct, greenPct, bluePct } = stats;
     const th = THRESHOLDS[mode] || THRESHOLDS.day;
 
-    // % 表示と同じスケールに合わせる
     const rp = redPct * 100;
     const gp = greenPct * 100;
     const bp = bluePct * 100;
@@ -371,8 +374,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ===== 判定ロジック（昼/夜） =====
   function decideResult(mode, stats) {
-    const { redPct, greenPct, bluePct } = stats;
-
     if (mode === 'inspect') {
       // 調査モード：OK/NG は出さない、ラベルのみ「調査」
       return {
@@ -440,6 +441,36 @@ window.addEventListener('DOMContentLoaded', () => {
       const textWidth = ctx.measureText(label).width;
       ctx.fillText(label, w - textWidth - 12, h - boxHeight / 2);
     }
+    ctx.restore();
+  }
+
+  // 調査モード用：数値パネルを画像に焼き込み
+  function overlayInspectStats(ctx, w, h, stats) {
+    const { rAvg, gAvg, bAvg, redPct, greenPct, bluePct } = stats;
+
+    const panelWidth = Math.min(220, w * 0.35);
+    const panelHeight = 140;
+    const x = 12;
+    const y = h * 0.3;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fillRect(x, y, panelWidth, panelHeight);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '14px -apple-system, system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+
+    const lineHeight = 20;
+    let yy = y + 8;
+
+    ctx.fillText(`Ravg : ${rAvg.toFixed(1)}`, x + 10, yy); yy += lineHeight;
+    ctx.fillText(`Gavg : ${gAvg.toFixed(1)}`, x + 10, yy); yy += lineHeight;
+    ctx.fillText(`Bavg : ${bAvg.toFixed(1)}`, x + 10, yy); yy += lineHeight;
+    ctx.fillText(`red% : ${(redPct * 100).toFixed(2)}`, x + 10, yy); yy += lineHeight;
+    ctx.fillText(`green%: ${(greenPct * 100).toFixed(2)}`, x + 10, yy); yy += lineHeight;
+    ctx.fillText(`blue% : ${(bluePct * 100).toFixed(2)}`, x + 10, yy);
+
     ctx.restore();
   }
 });
