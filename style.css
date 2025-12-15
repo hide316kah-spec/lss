@@ -1,159 +1,234 @@
-* {
-  box-sizing: border-box;
+:root{
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
+*{ box-sizing:border-box; }
+body{
+  margin:0;
+  font-family:-apple-system, system-ui, sans-serif;
+  background:#000;
+  color:#fff;
 }
 
-body {
-  background: #000;
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+.hidden{ display:none !important; }
+
+/* ===== モード選択 ===== */
+.mode-select{
+  min-height:100vh;
+  padding:calc(18px + var(--safe-top)) 16px calc(18px + var(--safe-bottom));
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+}
+.title{
+  margin:0;
+  font-size:22px;
+  font-weight:700;
+}
+.mode-row{
+  display:flex;
+  gap:12px;
+  width:100%;
+  justify-content:center;
+}
+.mode-card{
+  border:0;
+  background:#111;
+  border-radius:14px;
+  padding:10px;
+  width:110px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  color:#fff;
+}
+.mode-card img{
+  width:100%;
+  height:auto;
+  display:block;
+  border-radius:10px;
+}
+.mode-label{
+  font-size:14px;
+  opacity:.9;
+}
+.hint{
+  margin:0;
+  font-size:12px;
+  opacity:.75;
+  text-align:center;
+  max-width:360px;
 }
 
-/* ---------- モード選択 ---------- */
-
-#mode-select {
-  min-height: 100vh;
-  padding: 12px 8px 24px;
-  background: #000;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
+/* ===== アプリ画面 ===== */
+.app{
+  min-height:100vh;
+  padding-top:var(--safe-top);
+  padding-bottom:calc(90px + var(--safe-bottom));
 }
 
-.mode-card {
-  width: 100%;
-  max-width: 480px;
+.topbar{
+  position:fixed;
+  left:0; right:0;
+  top:0;
+  height:54px;
+  padding-top:var(--safe-top);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:rgba(0,0,0,.65);
+  z-index:50;
+}
+.back{
+  margin-left:10px;
+  border:0;
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  font-size:18px;
+  width:44px;
+  height:36px;
+  border-radius:10px;
+}
+.mode-name{
+  font-weight:700;
+  font-size:18px;
+  padding:6px 12px;
+  background:rgba(0,0,0,.55);
+  border-radius:12px;
+}
+.spacer{ flex:1; }
+
+/* OK/NGバッジ */
+.badge{
+  position:fixed;
+  top:calc(60px + var(--safe-top));
+  left:12px;
+  z-index:60;
+  font-weight:800;
+  padding:10px 14px;
+  border-radius:14px;
+  background:#00c853; /* OK */
+}
+.badge.ng{
+  background:#ff3b30; /* NG */
 }
 
-.mode-card img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+/* 映像エリア */
+.video-wrapper{
+  position:relative;
+  width:100%;
+  height:calc(100vh - 54px - 90px - var(--safe-top) - var(--safe-bottom));
+  margin-top:calc(54px + var(--safe-top));
+  overflow:hidden;
+  background:#000;
+}
+video{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover; /* これと同じ切り出しでcanvasも描く */
 }
 
-/* ---------- 撮影画面 ---------- */
-
-#app {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  overflow: hidden;
+/* ROI枠描画キャンバス */
+#overlayCanvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
 }
 
-.hidden {
-  display: none;
+/* 調査パネル */
+.inspect-panel{
+  position:absolute;
+  left:12px;
+  top:30%;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(0,0,0,.55);
+  font-size:16px;
+  line-height:1.35;
+  z-index:30;
+}
+body[data-mode="day"] .inspect-panel,
+body[data-mode="night"] .inspect-panel{
+  font-size:13px;          /* 昼夜は小さめ */
+  opacity:.9;
 }
 
-#cam,
-#previewCanvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+/* シャッター */
+.shutter{
+  position:fixed;
+  left:50%;
+  bottom:calc(16px + var(--safe-bottom));
+  transform:translateX(-50%);
+  border:0;
+  background:transparent;
+  z-index:80;
+}
+#shutterImage{
+  width:64px;              /* 元サイズ */
+  height:auto;
+  transform:scale(0.6);    /* 要求どおり 60% */
+  transform-origin:center;
+  display:block;
 }
 
-/*  保存用キャンバスは画面に出さない  */
-#captureCanvas {
-  display: none;
+/* フラッシュ */
+.flash{
+  position:absolute;
+  inset:0;
+  background:#fff;
+  opacity:0;
+  pointer-events:none;
+  z-index:40;
+}
+.flash.active{
+  opacity:.85;
+  transition:opacity 0s;
 }
 
-/* モード名ラベル（画面上部中央） */
-#modeLabel {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 4px 14px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  font-size: 14px;
-  font-weight: 700;
-  z-index: 20;
+/* 擬似バイブ：シェイク */
+@keyframes shake {
+  0%{ transform:translate(0,0); }
+  20%{ transform:translate(-2px, 1px); }
+  40%{ transform:translate(2px, -1px); }
+  60%{ transform:translate(-2px, -1px); }
+  80%{ transform:translate(2px, 1px); }
+  100%{ transform:translate(0,0); }
+}
+.app.shake{
+  animation:shake 0.25s linear 1;
 }
 
-/* OK / NG バッジ（左上） */
-.badge {
-  position: absolute;
-  top: 16px;
-  left: 12px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 700;
-  background: #666;
-  color: #fff;
-  z-index: 20;
+/* 擬似バイブ：枠点滅 */
+.video-wrapper.ls-blink-border{
+  outline:4px solid rgba(255,0,0,.75);
+  outline-offset:-4px;
 }
 
-.badge.ok {
-  background: #18c26b;
+/* 擬似バイブ：シャッターパルス */
+@keyframes pulse {
+  0%{ transform:scale(0.6); }
+  50%{ transform:scale(0.72); }
+  100%{ transform:scale(0.6); }
+}
+#shutterImage.ls-pulse{
+  animation:pulse 0.28s ease-in-out 1;
 }
 
-.badge.ng {
-  background: #e53935;
-}
-
-/* 調査モードの数値表示ボックス（左中央） */
-#inspectBox {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-family: "SF Mono", Menlo, Consolas, monospace;
-  font-size: 14px;
-  line-height: 1.4;
-  z-index: 20;
-}
-
-#inspectBox.small {
-  font-size: 11px;
-}
-
-/* シャッターボタン（カメラのイラスト） */
-#shutter {
-  position: absolute;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  border: none;
-  background: none;
-  padding: 0;
-  z-index: 20;
-}
-
-#shutter img {
-  display: block;
-  width: 120px; /* 少し小さめ＋中央寄せ */
-  height: auto;
-}
-
-/* フラッシュ演出 */
-#flashEffect {
-  position: fixed;
-  inset: 0;
-  background: #ffffff;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 999;
-  transition: opacity 120ms ease-out;
-}
-
-#flashEffect.active {
-  opacity: 1;
+/* status（最小。通常は非表示） */
+.status{
+  position:fixed;
+  left:10px;
+  bottom:calc(90px + var(--safe-bottom));
+  z-index:200;
+  background:rgba(0,0,0,.7);
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:13px;
 }

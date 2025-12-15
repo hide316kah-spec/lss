@@ -1,55 +1,90 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>ランプシャッター</title>
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#000000" />
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js").catch(() => {});
-      });
-    }
-  </script>
+  <title>ランプシャッター</title>
+
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <!-- モード選択画面 -->
-  <main id="mode-select">
-    <div class="mode-card">
-      <img id="dayBtn" src="mode_day.png" alt="昼モード" />
+
+  <!-- モード選択 -->
+  <main id="modeSelect" class="mode-select">
+    <h1 class="title">ランプシャッター</h1>
+
+    <div class="mode-row">
+      <button class="mode-card" data-mode="day" aria-label="昼モード">
+        <img src="./mode_day.png" alt="昼モード（赤）">
+        <div class="mode-label">昼</div>
+      </button>
+
+      <button class="mode-card" data-mode="night" aria-label="夜モード">
+        <img src="./mode_night.png" alt="夜モード（青）">
+        <div class="mode-label">夜</div>
+      </button>
+
+      <button class="mode-card" data-mode="inspect" aria-label="調査モード">
+        <img src="./mode_inspect.png" alt="調査モード（緑）">
+        <div class="mode-label">調査</div>
+      </button>
     </div>
-    <div class="mode-card">
-      <img id="nightBtn" src="mode_night.png" alt="夜モード" />
-    </div>
-    <div class="mode-card">
-      <img id="inspectBtn" src="mode_inspect.png" alt="調査モード" />
-    </div>
+
+    <p class="hint">
+      ※ iPhoneは撮影後、開いた画像の共有ボタンから「写真に保存」。
+    </p>
   </main>
 
-  <!-- 撮影・判定画面 -->
-  <div id="app" class="hidden">
-    <div id="modeLabel"></div>
-    <div id="badge" class="badge">OK</div>
+  <!-- アプリ本体 -->
+  <main id="app" class="app hidden">
 
-    <video id="cam" playsinline autoplay muted></video>
-    <canvas id="previewCanvas"></canvas>
+    <header class="topbar">
+      <button id="backToModeSelect" class="back">←</button>
+      <div id="modeName" class="mode-name">モード</div>
+      <div class="spacer"></div>
+    </header>
+
+    <!-- OK/NG バッジ（昼夜のみ） -->
+    <div id="judgeBadge" class="badge hidden">OK</div>
+
+    <section id="videoWrapper" class="video-wrapper">
+      <!-- ここは「映像表示用」。解析・保存もこの切り出しに合わせる -->
+      <video id="video" autoplay playsinline muted></video>
+
+      <!-- ROI枠＋表示用（透明） -->
+      <canvas id="overlayCanvas"></canvas>
+
+      <!-- フラッシュ -->
+      <div id="flashOverlay" class="flash"></div>
+
+      <!-- 調査パネル（UI表示用。保存用はapp.jsで焼き込み） -->
+      <div id="inspectPanel" class="inspect-panel">
+        <div>Ravg : <span id="rAvgVal">0.0</span></div>
+        <div>Gavg : <span id="gAvgVal">0.0</span></div>
+        <div>Bavg : <span id="bAvgVal">0.0</span></div>
+        <div>red% : <span id="redPctVal">0.00</span></div>
+        <div>green%: <span id="greenPctVal">0.00</span></div>
+        <div>blue% : <span id="bluePctVal">0.00</span></div>
+      </div>
+    </section>
+
+    <!-- シャッター -->
+    <button id="shutterButton" class="shutter" aria-label="シャッター">
+      <img id="shutterImage" src="./camera.png" alt="camera">
+    </button>
+
+    <!-- 保存用（非表示） -->
     <canvas id="captureCanvas" class="hidden"></canvas>
 
-    <div id="inspectBox">
-      <pre id="inspectTxt"></pre>
-    </div>
+    <!-- OK 音声（女性OK：既存のファイル名に合わせて適宜差し替え） -->
+    <audio id="okSound" preload="auto" src="./ok.mp3"></audio>
 
-    <button id="shutter" type="button" aria-label="シャッター">
-      <img src="camera.png" alt="シャッターボタン" />
-    </button>
-  </div>
+    <!-- エラー表示（最小） -->
+    <div id="status" class="status hidden">status</div>
 
-  <!-- フラッシュ用オーバーレイ -->
-  <div id="flashEffect"></div>
+  </main>
 
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>

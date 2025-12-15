@@ -1,55 +1,85 @@
-// ===== グローバル状態 =====
+// ランプシャッター（横取り装置判定 Web アプリ / PWA版）
+// 仕様：ROI右上固定 / 手動シャッター / フラッシュ+擬似バイブ / OK音声(OKのみ) / iOSはShare保存
+
 let currentMode = null; // 'day' | 'night' | 'inspect'
 let videoStream = null;
-let video = null;
-let previewCanvas = null;
-let previewCtx = null;
-let captureCanvas = null;
-let captureCtx = null;
-let okSound = null;
 
-let roi = { x: 0, y: 0, w: 0, h: 0 };
-
-// 閾値（昼/夜で分けて持つ：昼は紙デモなので基本いじらない）
 const THRESHOLDS = {
+  // 昼：紙デモ用（当面は甘めでもOK）
   day: {
     redStrongPct: 40,
     redMaybePct: 35,
     redDominanceMargin: 3,
-
-    // “ホット赤”は昼は弱め（紙デモで暴れないように）
-    hotRedMinCount: 6,
-    hotR: 200,
+    hotRedMinCount: 8,
+    hotR: 210,
     hotRatio: 1.35,
-    hotMaxR: 240
+    hotMaxR: 245
   },
+  // 夜：本番用（赤が小さくても拾う）
   night: {
     redStrongPct: 40,
     redMaybePct: 35,
     redDominanceMargin: 3,
-
-    // ★夜はここが本命：赤が小さくても強く光ったらNG?にする
     hotRedMinCount: 2,
     hotR: 180,
     hotRatio: 1.35,
-    hotMaxR: 220
+    hotMaxR: 225
   }
 };
+
+const ROI_CONFIG = {
+  // 右上固定・横長
+  wRatio: 0.50,
+  hRatio: 0.18,
+  margin: 10
+};
+
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  return /iP(hone|od|ad)/.test(ua);
+}
+
+function fmtOverlayDate(d){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  const ss=String(d.getSeconds()).padStart(2,'0');
+  return `${y}/${m}/${day} ${hh}:${mm}:${ss}`;
+}
+function fmtFileDate(d){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  const ss=String(d.getSeconds()).padStart(2,'0');
+  return `${y}${m}${day}_${hh}${mm}${ss}`;
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   const modeSelect = document.getElementById('modeSelect');
   const app = document.getElementById('app');
-  const modeButtons = document.querySelectorAll('.mode-card');
-  const modeNameEl = document.getElementById('modeName');
-  const backBtn = document.getElementById('backToModeSelect');
-  const shutterButton = document.getElementById('shutterButton');
 
-  video = document.getElementById('video');
-  previewCanvas = document.getElementById('previewCanvas');
-  previewCtx = previewCanvas.getContext('2d');
-  captureCanvas = document.getElementById('captureCanvas');
-  captureCtx = captureCanvas.getContext('2d');
-  okSound = document.getElementById('okSound');
+  const modeButtons = document.querySelectorAll('.mode-card');
+  const backBtn = document.getElementById('backToModeSelect');
+  const modeNameEl = document.getElementById('modeName');
+  const judgeBadge = document.getElementById('judgeBadge');
+
+  const video = document.getElementById('video');
+  const overlayCanvas = document.getElementById('overlayCanvas');
+  const overlayCtx = overlayCanvas.getContext('2d');
+
+  const captureCanvas = document.getElementById('captureCanvas');
+  const captureCtx = captureCanvas.getContext('2d');
+
+  const flashOverlay = document.getElementById('flashOverlay');
+  const videoWrapper = document.getElementById('videoWrapper');
+  const shutterButton = document.getElementById('shutterButton');
+  const shutterImage = document.getElementById('shutterImage');
+  const okSound = document.getElementById('okSound');
+  const statusEl = document.getElementById('status');
 
   // 数値表示
   const rAvgVal = document.getElementById('rAvgVal');
@@ -59,52 +89,220 @@ window.addEventListener('DOMContentLoaded', () => {
   const greenPctVal = document.getElementById('greenPctVal');
   const bluePctVal = document.getElementById('bluePctVal');
 
-  const flashOverlay = document.getElementById('flashOverlay');
-  const videoWrapper = document.getElementById('videoWrapper');
-  const shutterImage = document.getElementById('shutterImage');
+  const roi = { x:0, y:0, w:0, h:0 };
 
-  // モード選択
-  modeButtons.forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const mode = btn.getAttribute('data-mode'); // day/night/inspect
-      currentMode = mode;
+  const setStatus = (s, show=false) => {
+    if (!statusEl) return;
+    statusEl.textContent = `status: ${s}`;
+    if (show) statusEl.classList.remove('hidden');
+  };
 
-      if (mode === 'day') modeNameEl.textContent = '昼モード';
-      else if (mode === 'night') modeNameEl.textContent = '夜モード';
-      else modeNameEl.textContent = '調査モード';
+  function setModeUI(mode){
+    currentMode = mode;
+    document.body.setAttribute('data-mode', mode);
 
-      document.body.setAttribute('data-mode', mode);
+    if (mode === 'day') modeNameEl.textContent = '昼モード';
+    else if (mode === 'night') modeNameEl.textContent = '夜モード';
+    else modeNameEl.textContent = '調査モード';
 
-      modeSelect.classList.add('hidden');
-      app.classList.remove('hidden');
-
-      if (!videoStream) {
-        await initCamera();
-      }
-    });
-  });
-
-  backBtn.addEventListener('click', () => {
-    stopCamera();
-    currentMode = null;
-    document.body.removeAttribute('data-mode');
-    app.classList.add('hidden');
-    document.getElementById('modeSelect').classList.remove('hidden');
-  });
-
-  shutterButton.addEventListener('click', () => {
-    if (!videoStream || !currentMode) return;
-    captureAndSave();
-  });
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js').catch(console.error);
-    });
+    // バッジ：調査は出さない
+    if (mode === 'inspect') {
+      judgeBadge.classList.add('hidden');
+    } else {
+      judgeBadge.classList.remove('hidden');
+      judgeBadge.textContent = '…';
+      judgeBadge.classList.remove('ng');
+    }
   }
 
-  async function initCamera() {
-    try {
+  function resizeAll(){
+    const rect = videoWrapper.getBoundingClientRect();
+
+    overlayCanvas.width = Math.floor(rect.width);
+    overlayCanvas.height = Math.floor(rect.height);
+
+    captureCanvas.width = Math.floor(rect.width);
+    captureCanvas.height = Math.floor(rect.height);
+
+    // ROI（右上固定）
+    roi.w = rect.width * ROI_CONFIG.wRatio;
+    roi.h = rect.height * ROI_CONFIG.hRatio;
+    roi.x = rect.width - roi.w - ROI_CONFIG.margin;
+    roi.y = ROI_CONFIG.margin;
+
+    // 画面外に出ない保険
+    roi.x = Math.max(0, roi.x);
+    roi.y = Math.max(0, roi.y);
+    roi.w = Math.max(10, roi.w);
+    roi.h = Math.max(10, roi.h);
+  }
+
+  window.addEventListener('resize', resizeAll);
+
+  // ★重要：videoの表示（object-fit:cover）と同じ切り出しでcanvasに描く
+  function drawCover(ctx, vw, vh){
+    const cw = ctx.canvas.width;
+    const ch = ctx.canvas.height;
+
+    if (!vw || !vh || !cw || !ch) return;
+
+    const scale = Math.max(cw / vw, ch / vh);
+    const dw = vw * scale;
+    const dh = vh * scale;
+    const dx = (cw - dw) / 2;
+    const dy = (ch - dh) / 2;
+
+    ctx.drawImage(video, dx, dy, dw, dh);
+  }
+
+  // ROI統計（平均/支配率 + hotRedCount + maxR）
+  function computeRoiStats(ctx, roiRect, mode){
+    const th = THRESHOLDS[mode] || THRESHOLDS.night;
+    const step = 6;
+
+    const x = Math.floor(roiRect.x);
+    const y = Math.floor(roiRect.y);
+    const w = Math.floor(roiRect.w);
+    const h = Math.floor(roiRect.h);
+
+    const img = ctx.getImageData(x, y, w, h);
+    const data = img.data;
+
+    let sumR=0,sumG=0,sumB=0,count=0;
+    let rd=0,gd=0,bd=0;
+    let hot=0;
+    let maxR=0;
+
+    for(let yy=0; yy<h; yy+=step){
+      for(let xx=0; xx<w; xx+=step){
+        const i=((yy*w)+xx)*4;
+        const r=data[i], g=data[i+1], b=data[i+2];
+
+        sumR+=r; sumG+=g; sumB+=b; count++;
+
+        if (r>g && r>b) rd++;
+        else if (g>r && g>b) gd++;
+        else if (b>r && b>g) bd++;
+
+        if (r>maxR) maxR=r;
+
+        if (r >= th.hotR && r >= g*th.hotRatio && r >= b*th.hotRatio) {
+          hot++;
+        }
+      }
+    }
+
+    if (!count){
+      return { rAvg:0,gAvg:0,bAvg:0, redPct:0,greenPct:0,bluePct:0, hotRedCount:0, maxR:0 };
+    }
+
+    return {
+      rAvg: sumR/count,
+      gAvg: sumG/count,
+      bAvg: sumB/count,
+      redPct: rd/count,
+      greenPct: gd/count,
+      bluePct: bd/count,
+      hotRedCount: hot,
+      maxR
+    };
+  }
+
+  function isRedStrong(mode, stats){
+    const th = THRESHOLDS[mode] || THRESHOLDS.night;
+
+    const rp = stats.redPct * 100;
+    const gp = stats.greenPct * 100;
+    const bp = stats.bluePct * 100;
+
+    // 1) 面積が強い
+    if (rp >= th.redStrongPct) return true;
+
+    // 2) 小さくても“強い赤”が少数出たらNG
+    if (stats.hotRedCount >= th.hotRedMinCount) return true;
+
+    // 3) 最大赤が強烈（点灯の芯）
+    if (stats.maxR >= th.hotMaxR) return true;
+
+    // 4) 中間：赤が他より明確に優勢
+    const dom = rp - Math.max(gp, bp);
+    if (rp >= th.redMaybePct && dom >= th.redDominanceMargin && stats.rAvg >= stats.gAvg && stats.rAvg >= stats.bAvg) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function decide(mode, stats){
+    if (mode === 'inspect') return { code:'DBG', label:'調査', playOk:false };
+
+    if (isRedStrong(mode, stats)) return { code:'NG', label:'NG?', playOk:false };
+    return { code:'OK', label:'OK', playOk:true };
+  }
+
+  function drawRoiFrame(){
+    const w = overlayCanvas.width;
+    const h = overlayCanvas.height;
+
+    overlayCtx.clearRect(0,0,w,h);
+
+    // ROI枠のみ（映像はvideo要素に任せる）
+    overlayCtx.save();
+    overlayCtx.strokeStyle = 'rgba(0,255,0,.9)';
+    overlayCtx.setLineDash([10,6]);
+    overlayCtx.lineWidth = 3;
+    overlayCtx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+    overlayCtx.restore();
+  }
+
+  function updateBadge(dec){
+    if (currentMode === 'inspect') return;
+    judgeBadge.textContent = dec.label;
+    if (dec.code === 'NG') judgeBadge.classList.add('ng');
+    else judgeBadge.classList.remove('ng');
+  }
+
+  function updatePanel(stats){
+    rAvgVal.textContent = stats.rAvg.toFixed(1);
+    gAvgVal.textContent = stats.gAvg.toFixed(1);
+    bAvgVal.textContent = stats.bAvg.toFixed(1);
+    redPctVal.textContent = (stats.redPct*100).toFixed(2);
+    greenPctVal.textContent = (stats.greenPct*100).toFixed(2);
+    bluePctVal.textContent = (stats.bluePct*100).toFixed(2);
+  }
+
+  // 解析は「coverと同じ切り出し」でオフスクリーンに描いてからやる
+  const analysisCanvas = document.createElement('canvas');
+  const analysisCtx = analysisCanvas.getContext('2d');
+
+  function analysisFrame(){
+    if (!videoStream || !currentMode) return;
+
+    // サイズ同期
+    analysisCanvas.width = overlayCanvas.width;
+    analysisCanvas.height = overlayCanvas.height;
+
+    analysisCtx.clearRect(0,0,analysisCanvas.width,analysisCanvas.height);
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (vw && vh) {
+      drawCover(analysisCtx, vw, vh);
+
+      const stats = computeRoiStats(analysisCtx, roi, currentMode);
+      updatePanel(stats);
+
+      const dec = decide(currentMode, stats);
+      updateBadge(dec);
+    }
+
+    drawRoiFrame();
+    requestAnimationFrame(analysisFrame);
+  }
+
+  async function initCamera(){
+    try{
+      setStatus('camera starting');
       videoStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false
@@ -112,199 +310,139 @@ window.addEventListener('DOMContentLoaded', () => {
       video.srcObject = videoStream;
 
       video.addEventListener('loadedmetadata', () => {
-        resizeCanvases();
-        startPreviewLoop();
-      });
-    } catch (err) {
-      console.error('カメラ起動エラー', err);
-      alert('カメラにアクセスできませんでした。HTTPSと許可設定を確認してください。');
+        resizeAll();
+        setStatus('camera OK');
+        requestAnimationFrame(analysisFrame);
+      }, { once:true });
+
+    }catch(err){
+      setStatus(`camera ERROR: ${err && err.name ? err.name : err}`, true);
+      alert('カメラが起動できません。\nSafariの「aA→Webサイトの設定→カメラ→許可」を確認して。');
     }
   }
 
-  function stopCamera() {
-    if (videoStream) {
-      videoStream.getTracks().forEach(t => t.stop());
-      videoStream = null;
+  function stopCamera(){
+    if (videoStream){
+      videoStream.getTracks().forEach(t=>t.stop());
+      videoStream=null;
     }
   }
 
-  function resizeCanvases() {
-    const wrapper = document.getElementById('videoWrapper');
-    const rect = wrapper.getBoundingClientRect();
-
-    previewCanvas.width = rect.width;
-    previewCanvas.height = rect.height;
-
-    captureCanvas.width = rect.width;
-    captureCanvas.height = rect.height;
-
-    // ROI：右上・横長固定
-    const margin = 10;
-    const roiWidth = rect.width * 0.5;
-    const roiHeight = rect.height * 0.18;
-    roi.w = roiWidth;
-    roi.h = roiHeight;
-    roi.x = rect.width - roiWidth - margin;
-    roi.y = margin;
-  }
-
-  window.addEventListener('resize', resizeCanvases);
-
-  function startPreviewLoop() {
-    function loop() {
-      if (!videoStream) return;
-
-      const w = previewCanvas.width;
-      const h = previewCanvas.height;
-
-      previewCtx.clearRect(0, 0, w, h);
-      previewCtx.drawImage(video, 0, 0, w, h);
-
-      // ROI枠はプレビューのみ
-      previewCtx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
-      previewCtx.setLineDash([6, 4]);
-      previewCtx.lineWidth = 2;
-      previewCtx.strokeRect(roi.x, roi.y, roi.w, roi.h);
-      previewCtx.setLineDash([]);
-
-      const stats = computeRoiStats(previewCtx, roi, currentMode || 'night');
-
-      // 表示は今まで通り6項目だけ（UIは変えない）
-      rAvgVal.textContent = stats.rAvg.toFixed(1);
-      gAvgVal.textContent = stats.gAvg.toFixed(1);
-      bAvgVal.textContent = stats.bAvg.toFixed(1);
-      redPctVal.textContent = (stats.redPct * 100).toFixed(2);
-      greenPctVal.textContent = (stats.greenPct * 100).toFixed(2);
-      bluePctVal.textContent = (stats.bluePct * 100).toFixed(2);
-
-      requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-  }
-
-  // ROI統計：平均 + 支配率 + ★ホット赤カウント + maxR
-  function computeRoiStats(ctx, roiRect, modeForHot) {
-    const step = 6;
-    const { x, y, w, h } = roiRect;
-
-    const th = THRESHOLDS[modeForHot] || THRESHOLDS.night;
-
-    let sumR = 0, sumG = 0, sumB = 0;
-    let count = 0;
-    let redDominant = 0, greenDominant = 0, blueDominant = 0;
-
-    let hotRedCount = 0;
-    let maxR = 0;
-
-    const imageData = ctx.getImageData(x, y, w, h);
-    const data = imageData.data;
-
-    for (let yy = 0; yy < h; yy += step) {
-      for (let xx = 0; xx < w; xx += step) {
-        const idx = ((yy * w) + xx) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-
-        sumR += r; sumG += g; sumB += b;
-        count++;
-
-        if (r > g && r > b) redDominant++;
-        else if (g > r && g > b) greenDominant++;
-        else if (b > r && b > g) blueDominant++;
-
-        if (r > maxR) maxR = r;
-
-        // ★ホット赤：Rが高く、RがG/Bより比率で優勢
-        if (
-          r >= th.hotR &&
-          r >= g * th.hotRatio &&
-          r >= b * th.hotRatio
-        ) {
-          hotRedCount++;
-        }
-      }
-    }
-
-    if (count === 0) {
-      return { rAvg: 0, gAvg: 0, bAvg: 0, redPct: 0, greenPct: 0, bluePct: 0, hotRedCount: 0, maxR: 0 };
-    }
-
-    return {
-      rAvg: sumR / count,
-      gAvg: sumG / count,
-      bAvg: sumB / count,
-      redPct: redDominant / count,
-      greenPct: greenDominant / count,
-      bluePct: blueDominant / count,
-      hotRedCount,
-      maxR
-    };
-  }
-
-  function captureAndSave() {
-    // 物理バイブ（iOS Safariは基本無理）
-    if (navigator.vibrate) navigator.vibrate(100);
-
-    // フラッシュ
+  function flash(){
     flashOverlay.classList.add('active');
-    setTimeout(() => flashOverlay.classList.remove('active'), 150);
+    setTimeout(()=>flashOverlay.classList.remove('active'), 120);
+  }
 
-    // 擬似バイブ
-    app.classList.add('shake');
+  function pseudoVibe(){
+    // iOS振動は期待しない（擬似で統一）
+    document.getElementById('app').classList.add('shake');
     videoWrapper.classList.add('ls-blink-border');
     shutterImage.classList.add('ls-pulse');
-    setTimeout(() => {
-      app.classList.remove('shake');
+    setTimeout(()=>{
+      document.getElementById('app').classList.remove('shake');
       videoWrapper.classList.remove('ls-blink-border');
       shutterImage.classList.remove('ls-pulse');
     }, 300);
+  }
+
+  function overlayText(ctx, w, h, dateStr, label){
+    const boxH = 50;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.6)';
+    ctx.fillRect(0, h-boxH, w, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.font = '18px -apple-system,system-ui,sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(dateStr, 12, h - boxH/2);
+    if (label){
+      const tw = ctx.measureText(label).width;
+      ctx.fillText(label, w - tw - 12, h - boxH/2);
+    }
+    ctx.restore();
+  }
+
+  function overlayInspectStats(ctx, w, h, stats){
+    const panelW = Math.min(240, w*0.38);
+    const panelH = 150;
+    const px = 12;
+    const py = h * 0.30;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.65)';
+    ctx.fillRect(px, py, panelW, panelH);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px -apple-system,system-ui,sans-serif';
+    ctx.textBaseline = 'top';
+
+    const lh = 20;
+    let y = py + 8;
+    ctx.fillText(`Ravg : ${stats.rAvg.toFixed(1)}`, px+10, y); y+=lh;
+    ctx.fillText(`Gavg : ${stats.gAvg.toFixed(1)}`, px+10, y); y+=lh;
+    ctx.fillText(`Bavg : ${stats.bAvg.toFixed(1)}`, px+10, y); y+=lh;
+    ctx.fillText(`red% : ${(stats.redPct*100).toFixed(2)}`, px+10, y); y+=lh;
+    ctx.fillText(`green%: ${(stats.greenPct*100).toFixed(2)}`, px+10, y); y+=lh;
+    ctx.fillText(`blue% : ${(stats.bluePct*100).toFixed(2)}`, px+10, y);
+    ctx.restore();
+  }
+
+  function capture(){
+    flash();
+    pseudoVibe();
+    if (navigator.vibrate) navigator.vibrate(80); // iOSは期待しない
+
+    // 保存も「coverと同じ切り出し」で描く（ズレ防止）
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
 
     const w = captureCanvas.width;
     const h = captureCanvas.height;
 
-    captureCtx.clearRect(0, 0, w, h);
-    captureCtx.drawImage(video, 0, 0, w, h);
+    captureCtx.clearRect(0,0,w,h);
+    if (vw && vh) {
+      drawCover(captureCtx, vw, vh);
+    } else {
+      // まれにメタデータ未確定
+      captureCtx.drawImage(video, 0,0,w,h);
+    }
 
+    // 同じ切り出しで統計を取る
     const stats = computeRoiStats(captureCtx, roi, currentMode);
-
-    const decision = decideResult(currentMode, stats);
+    const dec = decide(currentMode, stats);
 
     const now = new Date();
-    const dateStr = formatDateForOverlay(now);
-    const fileBase = formatDateForFile(now);
+    const dateStr = fmtOverlayDate(now);
+    const base = fmtFileDate(now);
 
-    overlayText(captureCtx, w, h, dateStr, decision.label);
+    overlayText(captureCtx, w, h, dateStr, dec.label);
 
-    // 調査モードだけ数値焼き込み
-    if (currentMode === 'inspect') {
+    // 調査だけ数値焼き込み
+    if (currentMode === 'inspect'){
       overlayInspectStats(captureCtx, w, h, stats);
     }
 
-    if (decision.playOk && okSound) {
+    if (dec.playOk && okSound){
       okSound.currentTime = 0;
-      okSound.play().catch(() => {});
+      okSound.play().catch(()=>{});
     }
 
     let fileName;
-    if (currentMode === 'inspect') fileName = `${fileBase}_DBG.jpg`;
-    else if (decision.code === 'OK') fileName = `${fileBase}_OK.jpg`;
-    else fileName = `${fileBase}_NG?.jpg`;
+    if (currentMode === 'inspect') fileName = `${base}_DBG.jpg`;
+    else if (dec.code === 'OK') fileName = `${base}_OK.jpg`;
+    else fileName = `${base}_NG?.jpg`;
 
     const url = captureCanvas.toDataURL('image/jpeg', 0.92);
-    const ua = navigator.userAgent || '';
-    const isIOS = /iP(hone|od|ad)/.test(ua);
 
-    if (isIOS) {
+    if (isIOS()){
       const win = window.open(url, '_blank');
       if (!win) location.href = url;
-      try {
-        if (!localStorage.getItem('ls_ios_save_hint_shown')) {
+      try{
+        if (!localStorage.getItem('ls_ios_save_hint_shown')){
           alert('iPhoneでは自動で写真アプリに保存できません。\n開いた画像の共有ボタンから「写真に保存」を選んでください。');
-          localStorage.setItem('ls_ios_save_hint_shown', '1');
+          localStorage.setItem('ls_ios_save_hint_shown','1');
         }
-      } catch (e) {}
-    } else {
+      }catch(e){}
+    }else{
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
@@ -314,114 +452,40 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ★赤優勢判定：面積 + ホット赤 + maxR
-  function isRedStrong(mode, stats) {
-    const th = THRESHOLDS[mode] || THRESHOLDS.night;
+  // ===== イベント =====
+  modeButtons.forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const mode = btn.getAttribute('data-mode');
+      setModeUI(mode);
 
-    const rp = stats.redPct * 100;
-    const gp = stats.greenPct * 100;
-    const bp = stats.bluePct * 100;
+      modeSelect.classList.add('hidden');
+      app.classList.remove('hidden');
 
-    // 1) 面積で強い赤
-    if (rp >= th.redStrongPct) return true;
+      if (!videoStream){
+        await initCamera();
+      }else{
+        resizeAll();
+      }
+    });
+  });
 
-    // 2) “ホット赤”が少数でも出てたらNG?（赤ランプ小さくても拾う）
-    if (stats.hotRedCount >= th.hotRedMinCount) return true;
+  backBtn.addEventListener('click', ()=>{
+    stopCamera();
+    currentMode = null;
+    document.body.removeAttribute('data-mode');
+    app.classList.add('hidden');
+    modeSelect.classList.remove('hidden');
+  });
 
-    // 3) maxRが高い（瞬間的に強い赤が入った）
-    if (stats.maxR >= th.hotMaxR) return true;
+  shutterButton.addEventListener('click', ()=>{
+    if (!videoStream || !currentMode) return;
+    capture();
+  });
 
-    // 4) 中間ゾーン：赤が他より明確に優勢
-    const dominance = rp - Math.max(gp, bp);
-    if (
-      rp >= th.redMaybePct &&
-      dominance >= th.redDominanceMargin &&
-      stats.rAvg >= stats.gAvg &&
-      stats.rAvg >= stats.bAvg
-    ) {
-      return true;
-    }
-
-    return false;
-  }
-
-  function decideResult(mode, stats) {
-    if (mode === 'inspect') {
-      return { code: 'DBG', label: '調査', playOk: false };
-    }
-
-    const redStrong = isRedStrong(mode, stats);
-
-    if (redStrong) {
-      return { code: 'NG', label: 'NG?', playOk: false };
-    }
-    return { code: 'OK', label: 'OK', playOk: true };
-  }
-
-  function formatDateForOverlay(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${y}/${m}/${day} ${hh}:${mm}:${ss}`;
-  }
-
-  function formatDateForFile(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${y}${m}${day}_${hh}${mm}${ss}`;
-  }
-
-  function overlayText(ctx, w, h, dateStr, label) {
-    const boxHeight = 50;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, h - boxHeight, w, boxHeight);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '18px -apple-system, system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-
-    ctx.fillText(dateStr, 12, h - boxHeight / 2);
-
-    if (label) {
-      const textWidth = ctx.measureText(label).width;
-      ctx.fillText(label, w - textWidth - 12, h - boxHeight / 2);
-    }
-    ctx.restore();
-  }
-
-  function overlayInspectStats(ctx, w, h, stats) {
-    const panelWidth = Math.min(240, w * 0.38);
-    const panelHeight = 150;
-    const x = 12;
-    const y = h * 0.3;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-    ctx.fillRect(x, y, panelWidth, panelHeight);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px -apple-system, system-ui, sans-serif';
-    ctx.textBaseline = 'top';
-
-    const lh = 20;
-    let yy = y + 8;
-
-    ctx.fillText(`Ravg : ${stats.rAvg.toFixed(1)}`, x + 10, yy); yy += lh;
-    ctx.fillText(`Gavg : ${stats.gAvg.toFixed(1)}`, x + 10, yy); yy += lh;
-    ctx.fillText(`Bavg : ${stats.bAvg.toFixed(1)}`, x + 10, yy); yy += lh;
-    ctx.fillText(`red% : ${(stats.redPct * 100).toFixed(2)}`, x + 10, yy); yy += lh;
-    ctx.fillText(`green%: ${(stats.greenPct * 100).toFixed(2)}`, x + 10, yy); yy += lh;
-    ctx.fillText(`blue% : ${(stats.bluePct * 100).toFixed(2)}`, x + 10, yy);
-
-    ctx.restore();
+  // SW
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    });
   }
 });
