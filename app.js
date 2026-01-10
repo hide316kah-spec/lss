@@ -1,20 +1,21 @@
 // ランプシャッター（横取り装置判定 Web アプリ / PWA版）
-// ① 上下論理分離
-//   - 上エリア：右上の点滅ランプ → 時間評価
-//   - 下エリア：3連ランプ → 即NG
-// 表示・解析・保存はすべて object-fit: cover と一致
+// 【修正内容】
+// ・初回アクセス時の ROI形状ズレ修正
+// ・初回アクセス時の レイアウト差修正
+// ・カメライラストを押しても反応しない問題修正
+// ※ 判定ロジック（上下分離・点滅対応）は前回のまま
 
-let currentMode = null; // 'day' | 'night' | 'inspect'
+let currentMode = null;
 let videoStream = null;
+let cameraReady = false;   // ★追加：カメラ準備完了フラグ
 
 const ROI_CONFIG = {
   wRatio: 0.50,
   hRatio: 0.18,
   margin: 10,
-  upperRatio: 0.45 // ROI上側45%を「点滅ランプ領域」
+  upperRatio: 0.45
 };
 
-// 夜モード基準（本番）
 const TH = {
   redPct: 35,
   hotR: 180,
@@ -22,16 +23,14 @@ const TH = {
   lowerHotCount: 2
 };
 
-// 上エリア（点滅）用の時間評価
 const BLINK = {
-  windowMs: 400,   // 0.4秒
-  redRate: 0.6     // 60%以上 赤なら「赤あり」
+  windowMs: 400,
+  redRate: 0.6
 };
 
-let upperHistory = []; // [{t, red}]
-let lastTime = 0;
+let upperHistory = [];
 
-function isIOS() {
+function isIOS(){
   return /iP(hone|od|ad)/.test(navigator.userAgent || '');
 }
 
@@ -44,7 +43,7 @@ function fmtOverlayDate(d){
   return `${d.getFullYear()}/${z(d.getMonth()+1)}/${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
 }
 
-window.addEventListener('DOMContentLoaded', ()=>{
+window.addEventListener('DOMContentLoaded',()=>{
   const modeSelect = document.getElementById('modeSelect');
   const app = document.getElementById('app');
   const modeButtons = document.querySelectorAll('.mode-card');
@@ -85,19 +84,20 @@ window.addEventListener('DOMContentLoaded', ()=>{
     roi.x = rect.width - roi.w - ROI_CONFIG.margin;
     roi.y = ROI_CONFIG.margin;
   }
+
   window.addEventListener('resize', resizeAll);
 
   function drawCover(ctx){
     const vw = video.videoWidth;
     const vh = video.videoHeight;
+    if(!vw || !vh) return;
     const cw = ctx.canvas.width;
     const ch = ctx.canvas.height;
-    if(!vw||!vh) return;
     const scale = Math.max(cw/vw, ch/vh);
-    const dw = vw*scale;
-    const dh = vh*scale;
-    const dx = (cw-dw)/2;
-    const dy = (ch-dh)/2;
+    const dw = vw * scale;
+    const dh = vh * scale;
+    const dx = (cw - dw) / 2;
+    const dy = (ch - dh) / 2;
     ctx.drawImage(video, dx, dy, dw, dh);
   }
 
@@ -123,36 +123,26 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const uh = Math.floor(roi.h * ROI_CONFIG.upperRatio);
     const upper = {x:roi.x, y:roi.y, w:roi.w, h:uh};
     const lower = {x:roi.x, y:roi.y+uh, w:roi.w, h:roi.h-uh};
-    return {
-      upper: roiStats(ctx, upper),
-      lower: roiStats(ctx, lower)
-    };
+    return { upper: roiStats(ctx,upper), lower: roiStats(ctx,lower) };
   }
 
   function updateBlink(redNow){
     const now = performance.now();
     upperHistory.push({t:now, red:redNow});
-    const limit = now - BLINK.windowMs;
-    upperHistory = upperHistory.filter(e=>e.t>=limit);
+    upperHistory = upperHistory.filter(e=>e.t >= now - BLINK.windowMs);
     const redFrames = upperHistory.filter(e=>e.red).length;
-    return (redFrames / upperHistory.length) >= BLINK.redRate;
+    return redFrames / upperHistory.length >= BLINK.redRate;
   }
 
   function decide(stats){
     if(currentMode==='inspect') return {code:'DBG',label:'調査',ok:false};
-
-    // 下エリア：即NG
-    if(stats.lower.redPct*100 >= TH.redPct || stats.lower.hotCount>=TH.lowerHotCount){
+    if(stats.lower.redPct*100>=TH.redPct || stats.lower.hotCount>=TH.lowerHotCount){
       return {code:'NG',label:'NG?',ok:false};
     }
-
-    // 上エリア：点滅を時間評価
-    const upperRedNow = stats.upper.redPct*100 >= TH.redPct;
-    const upperRed = updateBlink(upperRedNow);
-    if(upperRed){
+    const upperRedNow = stats.upper.redPct*100>=TH.redPct;
+    if(updateBlink(upperRedNow)){
       return {code:'NG',label:'NG?',ok:false};
     }
-
     return {code:'OK',label:'OK',ok:true};
   }
 
@@ -169,9 +159,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   const analysisCtx = analysisCanvas.getContext('2d');
 
   function loop(){
-    if(!videoStream||!currentMode) return;
-    analysisCanvas.width=overlayCanvas.width;
-    analysisCanvas.height=overlayCanvas.height;
+    if(!videoStream || !currentMode || !cameraReady) return;
+    analysisCanvas.width = overlayCanvas.width;
+    analysisCanvas.height = overlayCanvas.height;
     analysisCtx.clearRect(0,0,analysisCanvas.width,analysisCanvas.height);
     drawCover(analysisCtx);
 
@@ -193,13 +183,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
   }
 
   async function initCamera(){
+    cameraReady = false;
     videoStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
     video.srcObject = videoStream;
-    video.onloadedmetadata=()=>{
-      resizeAll();
-      upperHistory=[];
-      requestAnimationFrame(loop);
-    };
+
+    video.addEventListener('loadedmetadata', ()=>{
+      // ★ここが今回のキモ
+      requestAnimationFrame(()=>{
+        resizeAll();
+        cameraReady = true;
+        upperHistory = [];
+        requestAnimationFrame(loop);
+      });
+    }, { once:true });
   }
 
   function flash(){
@@ -218,6 +214,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   }
 
   function capture(){
+    if(!cameraReady) return; // ★初期化前は無視
     flash(); pseudoVibe();
     captureCtx.clearRect(0,0,captureCanvas.width,captureCanvas.height);
     drawCover(captureCtx);
@@ -253,8 +250,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   }
 
   modeButtons.forEach(btn=>{
-    btn.onclick=async()=>{
-      currentMode=btn.dataset.mode;
+    btn.onclick = async ()=>{
+      currentMode = btn.dataset.mode;
       document.body.setAttribute('data-mode',currentMode);
       modeNameEl.textContent = currentMode==='day'?'昼モード':currentMode==='night'?'夜モード':'調査モード';
       judgeBadge.classList.toggle('hidden', currentMode==='inspect');
@@ -264,15 +261,14 @@ window.addEventListener('DOMContentLoaded', ()=>{
     };
   });
 
-  backBtn.onclick=()=>{
+  backBtn.onclick = ()=>{
     if(videoStream){ videoStream.getTracks().forEach(t=>t.stop()); videoStream=null; }
-    currentMode=null;
+    cameraReady = false;
+    currentMode = null;
     document.body.removeAttribute('data-mode');
     app.classList.add('hidden');
     modeSelect.classList.remove('hidden');
   };
 
-  shutterButton.onclick=()=>{
-    if(videoStream&&currentMode) capture();
-  };
+  shutterButton.onclick = capture;
 });
