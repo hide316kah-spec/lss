@@ -30,6 +30,9 @@ const BLINK = {
 
 let upperHistory = [];
 
+// ★追加：シャッター連打や二重実行で固まるのを防ぐ
+let shotBusy = false;
+
 function isIOS(){
   return /iP(hone|od|ad)/.test(navigator.userAgent || '');
 }
@@ -215,6 +218,9 @@ window.addEventListener('DOMContentLoaded',()=>{
 
   function capture(){
     if(!cameraReady) return; // ★初期化前は無視
+    if(shotBusy) return;     // ★二重実行防止
+    shotBusy = true;
+
     flash(); pseudoVibe();
     captureCtx.clearRect(0,0,captureCanvas.width,captureCanvas.height);
     drawCover(captureCtx);
@@ -239,14 +245,36 @@ window.addEventListener('DOMContentLoaded',()=>{
         ? `${fmtFileDate(now)}_OK.jpg`
         : `${fmtFileDate(now)}_NG?.jpg`;
 
-    const url = captureCanvas.toDataURL('image/jpeg',0.92);
-    if(isIOS()){
-      window.open(url,'_blank');
-    }else{
-      const a=document.createElement('a');
-      a.href=url; a.download=name;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    }
+    // ★修正：toDataURL(重い/固まりやすい)→toBlob(軽い) + iOSは先に空タブを開く
+    const w = isIOS() ? window.open('about:blank','_blank') : null;
+
+    captureCanvas.toBlob((blob)=>{
+      try{
+        if(!blob){
+          if(w) w.close();
+          return;
+        }
+
+        const blobUrl = URL.createObjectURL(blob);
+
+        if(isIOS()){
+          // iOSは別タブに画像を表示 → 共有から写真に保存
+          if(w) w.location.href = blobUrl;
+          else window.location.href = blobUrl;
+        }else{
+          const a=document.createElement('a');
+          a.href = blobUrl;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+
+        setTimeout(()=>URL.revokeObjectURL(blobUrl), 15000);
+      } finally {
+        shotBusy = false;
+      }
+    }, 'image/jpeg', 0.92);
   }
 
   modeButtons.forEach(btn=>{
